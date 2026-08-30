@@ -77,14 +77,6 @@ src/main/java/com/tasnim/taskflow_api/
 └── TaskController.java           # API routes and in-memory storage
 ```
 
-## Next Steps
-
-- Update and delete endpoints
-- Persistent database storage
-- Service and repository layers
-- Automated controller tests
-- Authentication and deployment
-
 ## Author
 
 **Tasnim Akhter** · [GitHub](https://github.com/tasnimrimi) · [LinkedIn](https://www.linkedin.com/in/tasnim-akhter%F0%9F%92%A0-a99082315/)
