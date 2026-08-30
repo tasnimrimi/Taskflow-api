@@ -15,7 +15,7 @@
 
 ## 📖 About
 
-TaskFlow API is a task-management backend created while learning Java and Spring Boot.
+TaskFlow API is a task-management backend created, Java and Spring Boot.
 
 The project demonstrates how a client sends requests to a backend, how Spring routes those requests to Java methods, and how Java objects are returned as JSON.
 
