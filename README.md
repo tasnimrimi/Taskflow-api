@@ -6,71 +6,39 @@
 
 ![Java](https://img.shields.io/badge/Java-17-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
-![Maven](https://img.shields.io/badge/Maven-Build_Tool-C71A36?style=for-the-badge&logo=apachemaven&logoColor=white)
+![Maven](https://img.shields.io/badge/Maven-Wrapper-C71A36?style=for-the-badge&logo=apachemaven&logoColor=white)
 ![Status](https://img.shields.io/badge/Status-Learning_Project-7C5CFC?style=for-the-badge)
 
 </div>
 
----
+## About
 
-## 📖 About
+TaskFlow is a small backend project created to learn how a REST API works from request to response. A client sends an HTTP request, Spring routes it to a Java controller, and the result is returned as JSON.
 
-TaskFlow API is a task-management backend created, Java and Spring Boot.
+## Current Features
 
-The project demonstrates how a client sends requests to a backend, how Spring routes those requests to Java methods, and how Java objects are returned as JSON.
+- List all tasks with `GET /api/tasks`
+- Create a task with `POST /api/tasks`
+- Generate task IDs automatically
+- Validate JSON request bodies
+- Store tasks in memory while the server is running
+- Check application health through Spring Boot Actuator
 
-## ✨ Current Features
-
-- View all tasks
-- Create a new task
-- Automatic task ID generation
-- JSON request and response handling
-- Spring Boot health monitoring
-- In-memory task storage
-
-## 🛠️ Technology
-
-- Java 17
-- Spring Boot
-- Spring Web
-- Spring Boot Actuator
-- Maven
-- Git and GitHub
-
-## 🔄 Request Workflow
+## Request Workflow
 
 ```text
-Client sends request
-        ↓
-Tomcat receives request
-        ↓
-Spring finds the correct controller
-        ↓
-Controller runs a Java method
-        ↓
-Task objects are created or retrieved
-        ↓
-Spring converts the result to JSON
-        ↓
-Client receives the response
+Client → embedded Tomcat server → Spring controller → Java objects → JSON response
 ```
 
-## 🔗 API Endpoints
+## API Reference
 
-| Method | Endpoint | Description |
+| Method | Endpoint | Purpose |
 |---|---|---|
-| `GET` | `/api/tasks` | Return all tasks |
+| `GET` | `/api/tasks` | Return every task |
 | `POST` | `/api/tasks` | Create a new task |
-| `GET` | `/actuator/health` | Check application health |
+| `GET` | `/actuator/health` | Check whether the application is healthy |
 
-## 📥 Create a Task
-
-Request:
-
-```http
-POST /api/tasks
-Content-Type: application/json
-```
+Example request:
 
 ```json
 {
@@ -78,7 +46,7 @@ Content-Type: application/json
 }
 ```
 
-Response:
+Example response:
 
 ```json
 {
@@ -88,45 +56,35 @@ Response:
 }
 ```
 
-## ▶️ Run Locally
+## Run Locally
 
-### Requirements
-
-- Java 17
-- Git
-
-### Setup
-
-Clone the repository:
-
-```bash
-git clone https://github.com/tasnimrimi/taskflow-api.git
-```
-
-Enter the project:
-
-```bash
-cd taskflow-api
-```
-
-Run on Windows:
+Requirements: Java 17 and Git. Maven does not need to be installed because the repository includes the Maven Wrapper.
 
 ```powershell
+git clone https://github.com/tasnimrimi/Taskflow-api.git
+cd Taskflow-api
 .\mvnw.cmd spring-boot:run
 ```
 
-The API will be available at:
+Then open [http://localhost:8080/api/tasks](http://localhost:8080/api/tasks).
+
+## Project Structure
 
 ```text
-http://localhost:8080
-http://localhost:8080/api/tasks
+src/main/java/com/tasnim/taskflow_api/
+├── TaskflowApiApplication.java   # application entry point
+├── Task.java                     # task data model
+└── TaskController.java           # API routes and in-memory storage
 ```
 
+## Next Steps
 
-## 👩‍💻 Author
+- Update and delete endpoints
+- Persistent database storage
+- Service and repository layers
+- Automated controller tests
+- Authentication and deployment
 
-**Tasnim Akhter**
+## Author
 
-- [GitHub](https://github.com/tasnimrimi)
-- [LinkedIn](https://www.linkedin.com/in/tasnim-akhter%F0%9F%92%A0-a99082315/)
-
+**Tasnim Akhter** · [GitHub](https://github.com/tasnimrimi) · [LinkedIn](https://www.linkedin.com/in/tasnim-akhter%F0%9F%92%A0-a99082315/)
