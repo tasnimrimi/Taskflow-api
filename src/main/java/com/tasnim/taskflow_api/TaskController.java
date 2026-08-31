@@ -1,5 +1,6 @@
 package com.tasnim.taskflow_api;
 
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import java.util.ArrayList;
@@ -50,4 +51,27 @@ public class TaskController {
 
         return "Task not found";
     }
+    @PutMapping("/{id}")
+    public Task updateTask(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> request
+    ) {
+        for (Task task : tasks) {
+            if (task.getId().equals(id)) {
+
+                if (request.containsKey("title")) {
+                    task.setTitle((String) request.get("title"));
+                }
+
+                if (request.containsKey("completed")) {
+                    task.setCompleted((Boolean) request.get("completed"));
+                }
+
+                return task;
+            }
+        }
+
+        return null;
+    }
+
 }
