@@ -1,5 +1,7 @@
 package com.tasnim.taskflow_api;
 
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -37,5 +39,15 @@ public class TaskController {
         tasks.add(newTask);
 
         return newTask;
+    }
+    @DeleteMapping("/{id}")
+    public String deleteTask(@PathVariable Long id) {
+        boolean removed = tasks.removeIf(task -> task.getId().equals(id));
+
+        if (removed) {
+            return "Task deleted successfully";
+        }
+
+        return "Task not found";
     }
 }
