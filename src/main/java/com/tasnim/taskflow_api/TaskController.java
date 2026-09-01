@@ -3,6 +3,10 @@ package com.tasnim.taskflow_api;
 import java.util.List;
 import java.util.Map;
 
+import jakarta.validation.Valid;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -11,27 +15,27 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.http.ResponseEntity;
-import org.springframework.http.HttpStatus;
-import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/tasks")
 public class TaskController {
 
-    private final TaskRepository taskRepository;
+    private final TaskService taskService;
 
-    public TaskController(TaskRepository taskRepository) {
-        this.taskRepository = taskRepository;
+    public TaskController(TaskService taskService) {
+        this.taskService = taskService;
     }
 
     @GetMapping
     public List<Task> getTasks() {
-        return taskRepository.findAll();
+        return taskService.getAllTasks();
     }
+
     @GetMapping("/{id}")
-    public ResponseEntity<Task> getTaskById(@PathVariable Long id) {
-        Task task = taskRepository.findById(id).orElse(null);
+    public ResponseEntity<Task> getTaskById(
+            @PathVariable Long id
+    ) {
+        Task task = taskService.getTaskById(id);
 
         if (task == null) {
             return ResponseEntity.notFound().build();
@@ -44,11 +48,8 @@ public class TaskController {
     public ResponseEntity<Task> createTask(
             @Valid @RequestBody CreateTaskRequest request
     ) {
-        Task newTask = new Task();
-        newTask.setTitle(request.getTitle());
-        newTask.setCompleted(false);
-
-        Task savedTask = taskRepository.save(newTask);
+        Task savedTask =
+                taskService.createTask(request.getTitle());
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -60,32 +61,33 @@ public class TaskController {
             @PathVariable Long id,
             @RequestBody Map<String, Object> request
     ) {
-        Task task = taskRepository.findById(id).orElse(null);
+        String title = request.containsKey("title")
+                ? (String) request.get("title")
+                : null;
 
-        if (task == null) {
+        Boolean completed = request.containsKey("completed")
+                ? (Boolean) request.get("completed")
+                : null;
+
+        Task updatedTask =
+                taskService.updateTask(id, title, completed);
+
+        if (updatedTask == null) {
             return ResponseEntity.notFound().build();
         }
-
-        if (request.containsKey("title")) {
-            task.setTitle((String) request.get("title"));
-        }
-
-        if (request.containsKey("completed")) {
-            task.setCompleted((Boolean) request.get("completed"));
-        }
-
-        Task updatedTask = taskRepository.save(task);
 
         return ResponseEntity.ok(updatedTask);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteTask(@PathVariable Long id) {
-        if (!taskRepository.existsById(id)) {
+    public ResponseEntity<Void> deleteTask(
+            @PathVariable Long id
+    ) {
+        boolean deleted = taskService.deleteTask(id);
+
+        if (!deleted) {
             return ResponseEntity.notFound().build();
         }
-
-        taskRepository.deleteById(id);
 
         return ResponseEntity.noContent().build();
     }
