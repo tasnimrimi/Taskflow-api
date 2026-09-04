@@ -4,6 +4,9 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import static org.mockito.Mockito.never;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.verify;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -67,5 +70,39 @@ class TaskServiceTest {
         // Assert: check both requirements
         assertEquals("Learn testing", result.getTitle());
         assertFalse(result.isCompleted());
+    }
+
+    @Test
+    void shouldDeleteTaskWhenTaskExists() {
+        // Arrange: pretend task 1 exists
+        TaskRepository repository = mock(TaskRepository.class);
+        TaskService service = new TaskService(repository);
+
+        when(repository.existsById(1L))
+                .thenReturn(true);
+
+        // Act: ask the real service to delete it
+        boolean result = service.deleteTask(1L);
+
+        // Assert: check the result and the action
+        assertTrue(result);
+        verify(repository).deleteById(1L);
+    }
+
+    @Test
+    void shouldNotDeleteTaskWhenTaskDoesNotExist() {
+        // Arrange: pretend task 999 does not exist
+        TaskRepository repository = mock(TaskRepository.class);
+        TaskService service = new TaskService(repository);
+
+        when(repository.existsById(999L))
+                .thenReturn(false);
+
+        // Act: try to delete it
+        boolean result = service.deleteTask(999L);
+
+        // Assert: report failure without requesting deletion
+        assertFalse(result);
+        verify(repository, never()).deleteById(999L);
     }
 }
