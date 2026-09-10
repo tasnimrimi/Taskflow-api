@@ -5,6 +5,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Column;
 
 @Entity
 @Table(name = "tasks")
@@ -14,7 +15,9 @@ public class Task {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(nullable = false, length = 100)
     private String title;
+    @Column(nullable = false)
     private boolean completed;
 
     public Task() {
