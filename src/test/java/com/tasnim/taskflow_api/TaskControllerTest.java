@@ -7,6 +7,7 @@ import org.springframework.http.MediaType;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import org.junit.jupiter.api.Test;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -143,5 +144,26 @@ class TaskControllerTest {
         // Act and Assert
         mockMvc.perform(delete("/api/tasks/999"))
                 .andExpect(status().isNotFound());
+    }
+    @Test
+    void shouldReturnFilteredTasksWhenCompletedIsProvided()
+            throws Exception {
+
+        // Arrange: fake service returns one completed task
+        Task completedTask =
+                new Task(1L, "Completed task", true);
+
+        when(taskService.getTasksByCompleted(true))
+                .thenReturn(List.of(completedTask));
+
+        // Act and Assert
+        mockMvc.perform(get("/api/tasks")
+                        .param("completed", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(1))
+                .andExpect(jsonPath("$[0].title")
+                        .value("Completed task"))
+                .andExpect(jsonPath("$[0].completed").value(true));
     }
 }

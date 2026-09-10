@@ -4,7 +4,7 @@ import java.util.List;
 
 
 import jakarta.validation.Valid;
-
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
 
 @RestController
 @RequestMapping("/api/tasks")
@@ -27,8 +28,14 @@ public class TaskController {
     }
 
     @GetMapping
-    public List<Task> getTasks() {
-        return taskService.getAllTasks();
+    public List<Task> getTasks(
+            @RequestParam(required = false) Boolean completed
+    ) {
+        if (completed == null) {
+            return taskService.getAllTasks();
+        }
+
+        return taskService.getTasksByCompleted(completed);
     }
 
     @GetMapping("/{id}")

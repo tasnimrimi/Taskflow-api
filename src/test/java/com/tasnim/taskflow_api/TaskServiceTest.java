@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import static org.mockito.Mockito.never;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
@@ -104,5 +105,25 @@ class TaskServiceTest {
         // Assert: report failure without requesting deletion
         assertFalse(result);
         verify(repository, never()).deleteById(999L);
+    }
+    @Test
+    void shouldReturnOnlyTasksWithRequestedCompletionStatus() {
+        // Arrange
+        TaskRepository repository = mock(TaskRepository.class);
+        TaskService service = new TaskService(repository);
+
+        Task unfinishedTask =
+                new Task(1L, "Learn filtering", false);
+
+        when(repository.findByCompleted(false))
+                .thenReturn(List.of(unfinishedTask));
+
+        // Act
+        List<Task> results =
+                service.getTasksByCompleted(false);
+
+        // Assert
+        assertEquals(1, results.size());
+        assertSame(unfinishedTask, results.get(0));
     }
 }

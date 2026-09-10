@@ -16,6 +16,9 @@ public class TaskService {
     public List<Task> getAllTasks() {
         return taskRepository.findAll();
     }
+    public List<Task> getTasksByCompleted(boolean completed) {
+        return taskRepository.findByCompleted(completed);
+    }
 
     public Task getTaskById(Long id) {
         return taskRepository.findById(id).orElse(null);

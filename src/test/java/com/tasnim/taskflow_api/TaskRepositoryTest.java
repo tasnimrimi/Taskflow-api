@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import java.util.List;
 
 import java.util.Optional;
 
@@ -57,5 +58,37 @@ class TaskRepositoryTest {
 
         // Assert: confirm it no longer exists
         assertFalse(taskRepository.existsById(taskId));
+    }
+    @Test
+    void shouldFindOnlyUnfinishedTasks() {
+        // Arrange: create tasks with different completion values
+        Task finishedTask =
+                new Task(null, "Finished task", true);
+
+        Task unfinishedTaskOne =
+                new Task(null, "Unfinished task one", false);
+
+        Task unfinishedTaskTwo =
+                new Task(null, "Unfinished task two", false);
+
+        taskRepository.saveAllAndFlush(
+                List.of(
+                        finishedTask,
+                        unfinishedTaskOne,
+                        unfinishedTaskTwo
+                )
+        );
+
+        // Act: ask the database only for unfinished tasks
+        List<Task> results =
+                taskRepository.findByCompleted(false);
+
+        // Assert
+        assertEquals(2, results.size());
+
+        assertTrue(
+                results.stream()
+                        .allMatch(task -> !task.isCompleted())
+        );
     }
 }

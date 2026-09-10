@@ -6,6 +6,7 @@ import org.springframework.http.MediaType;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import org.junit.jupiter.api.Test;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -134,5 +135,37 @@ class TaskFlowIntegrationTest {
 
         // Assert: confirm H2 no longer contains it
         assertFalse(taskRepository.existsById(taskId));
+    }
+    @Test
+    void shouldFilterTasksThroughCompleteApplication()
+            throws Exception {
+
+        // Arrange: save tasks with different statuses
+        Task completedTask =
+                new Task(null, "Completed task", true);
+
+        Task unfinishedTaskOne =
+                new Task(null, "Unfinished task one", false);
+
+        Task unfinishedTaskTwo =
+                new Task(null, "Unfinished task two", false);
+
+        taskRepository.saveAllAndFlush(
+                List.of(
+                        completedTask,
+                        unfinishedTaskOne,
+                        unfinishedTaskTwo
+                )
+        );
+
+        // Act: request only unfinished tasks
+        mockMvc.perform(get("/api/tasks")
+                        .param("completed", "false"))
+                .andExpect(status().isOk())
+
+                // Assert: only two tasks were returned
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].completed").value(false))
+                .andExpect(jsonPath("$[1].completed").value(false));
     }
 }
