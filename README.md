@@ -8,7 +8,7 @@
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Flyway](https://img.shields.io/badge/Flyway-Migrations-CC0200?style=for-the-badge&logo=flyway&logoColor=white)
-![Tests](https://img.shields.io/badge/Automated_Tests-18-22C55E?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Automated_Tests-22-22C55E?style=for-the-badge)
 
 </div>
 
@@ -21,6 +21,7 @@ The application supports a local H2 setup and a PostgreSQL profile. PostgreSQL s
 ## Features
 
 - Create, list, find, partially update, and delete tasks
+- Filter tasks by completed or unfinished status
 - Validate task titles before processing requests
 - Return structured JSON validation errors
 - Use the appropriate `200`, `201`, `204`, `400`, and `404` status codes
@@ -55,6 +56,7 @@ Database
 | Method | Endpoint | Success | Description |
 |---|---|---:|---|
 | `GET` | `/api/tasks` | `200` | List every task |
+| `GET` | `/api/tasks?completed={boolean}` | `200` | List only completed or unfinished tasks |
 | `GET` | `/api/tasks/{id}` | `200` | Find one task; returns `404` when missing |
 | `POST` | `/api/tasks` | `201` | Create a task |
 | `PATCH` | `/api/tasks/{id}` | `200` | Update only the supplied fields; returns `404` when missing |
@@ -99,6 +101,22 @@ Content-Type: application/json
 }
 ```
 
+### Filter tasks by status
+
+Return only completed tasks:
+
+```http
+GET /api/tasks?completed=true
+```
+
+Return only unfinished tasks:
+
+```http
+GET /api/tasks?completed=false
+```
+
+Omit the `completed` query parameter to return every task.
+
 ### Validation error
 
 A blank title produces `400 Bad Request`:
@@ -139,22 +157,23 @@ The password is read through `${DB_PASSWORD}` and is never stored in the reposit
 
 ## Database Migration
 
-The current schema is created by:
+The schema is managed by these versioned migrations:
 
 ```text
-src/main/resources/db/migration/V1__create_tasks_table.sql
+V1__create_tasks_table.sql         # creates the tasks table
+V2__limit_task_title_length.sql    # limits titles to 100 characters
 ```
 
-Flyway records the completed migration in `flyway_schema_history`, ensuring version 1 is applied only once.
+Flyway records completed migrations in `flyway_schema_history` and applies each version only once.
 
 ## Automated Tests
 
-The project currently contains 18 focused automated tests:
+The project currently contains 22 focused automated tests:
 
-- **5 service tests:** task lookup, partial updates, and deletion logic using a mocked repository
-- **7 controller tests:** routing, JSON, validation, and HTTP responses using a mocked service
-- **2 repository tests:** real JPA save, find, and delete behavior with temporary H2
-- **4 integration tests:** complete GET, POST, PATCH, and DELETE workflows through all application layers
+- **6 service tests:** task lookup, partial updates, deletion, and filtering logic using a mocked repository
+- **8 controller tests:** routing, query parameters, JSON, validation, and HTTP responses using a mocked service
+- **3 repository tests:** real JPA save, find, delete, and filtering behavior with temporary H2
+- **5 integration tests:** complete CRUD and filtering workflows through all application layers
 
 Run the focused test suite:
 
@@ -165,7 +184,7 @@ Run the focused test suite:
 Expected result:
 
 ```text
-Tests run: 18, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 22, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -184,7 +203,9 @@ src/
 │   │   ├── TaskflowApiApplication.java
 │   │   └── UpdateTaskRequest.java
 │   └── resources/
-│       ├── db/migration/V1__create_tasks_table.sql
+│       ├── db/migration/
+│       │   ├── V1__create_tasks_table.sql
+│       │   └── V2__limit_task_title_length.sql
 │       ├── application-postgres.properties
 │       └── application.properties
 └── test/java/com/tasnim/taskflow_api/
