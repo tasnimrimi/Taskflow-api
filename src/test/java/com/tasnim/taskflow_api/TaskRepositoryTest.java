@@ -91,4 +91,36 @@ class TaskRepositoryTest {
                         .allMatch(task -> !task.isCompleted())
         );
     }
+    @Test
+    void shouldSearchTasksByTitleIgnoringCase() {
+        // Arrange
+        Task firstTask =
+                new Task(null, "Learn Spring Boot", false);
+
+        Task secondTask =
+                new Task(null, "Practise Java", false);
+
+        Task thirdTask =
+                new Task(null, "SPRING testing", true);
+
+        taskRepository.saveAllAndFlush(
+                List.of(firstTask, secondTask, thirdTask)
+        );
+
+        // Act: search using lowercase text
+        List<Task> results =
+                taskRepository.findByTitleContainingIgnoreCase("spring");
+
+        // Assert: both Spring titles should be returned
+        assertEquals(2, results.size());
+
+        assertTrue(
+                results.stream()
+                        .allMatch(task ->
+                                task.getTitle()
+                                        .toLowerCase()
+                                        .contains("spring")
+                        )
+        );
+    }
 }

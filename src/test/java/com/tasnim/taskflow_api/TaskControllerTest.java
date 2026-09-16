@@ -166,4 +166,25 @@ class TaskControllerTest {
                         .value("Completed task"))
                 .andExpect(jsonPath("$[0].completed").value(true));
     }
+    @Test
+    void shouldReturnTasksMatchingTitleSearch()
+            throws Exception {
+
+        // Arrange
+        Task matchingTask =
+                new Task(1L, "Learn Spring Boot", false);
+
+        when(taskService.searchTasksByTitle("spring"))
+                .thenReturn(List.of(matchingTask));
+
+        // Act and Assert
+        mockMvc.perform(get("/api/tasks/search")
+                        .param("title", "spring"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(1))
+                .andExpect(jsonPath("$[0].title")
+                        .value("Learn Spring Boot"))
+                .andExpect(jsonPath("$[0].completed").value(false));
+    }
 }

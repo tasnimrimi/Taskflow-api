@@ -20,6 +20,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:taskflow-integration"
@@ -167,5 +168,25 @@ class TaskFlowIntegrationTest {
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].completed").value(false))
                 .andExpect(jsonPath("$[1].completed").value(false));
+    }
+    @Test
+    void shouldSearchTasksThroughCompleteApplication() throws Exception {
+        Task springTask = new Task(null, "Learn Spring Boot", false);
+        Task javaTask = new Task(null, "Practise Java", false);
+        Task testingTask = new Task(null, "SPRING testing", true);
+
+        taskRepository.saveAllAndFlush(
+                List.of(springTask, javaTask, testingTask)
+        );
+
+        mockMvc.perform(get("/api/tasks/search")
+                        .param("title", "spring"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[*].title",
+                        containsInAnyOrder(
+                                "Learn Spring Boot",
+                                "SPRING testing"
+                        )));
     }
 }

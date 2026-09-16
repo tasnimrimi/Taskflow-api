@@ -19,6 +19,10 @@ public class TaskService {
     public List<Task> getTasksByCompleted(boolean completed) {
         return taskRepository.findByCompleted(completed);
     }
+    public List<Task> searchTasksByTitle(String title) {
+        return taskRepository
+                .findByTitleContainingIgnoreCase(title);
+    }
 
     public Task getTaskById(Long id) {
         return taskRepository.findById(id).orElse(null);

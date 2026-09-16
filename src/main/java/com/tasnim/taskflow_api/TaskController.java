@@ -38,6 +38,13 @@ public class TaskController {
         return taskService.getTasksByCompleted(completed);
     }
 
+    @GetMapping("/search")
+    public List<Task> searchTasks(
+            @RequestParam String title
+    ) {
+        return taskService.searchTasksByTitle(title);
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<Task> getTaskById(
             @PathVariable Long id

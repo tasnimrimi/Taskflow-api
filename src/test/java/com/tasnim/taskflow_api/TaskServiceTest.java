@@ -126,4 +126,24 @@ class TaskServiceTest {
         assertEquals(1, results.size());
         assertSame(unfinishedTask, results.get(0));
     }
+    @Test
+    void shouldReturnTasksMatchingTitleSearch() {
+        // Arrange
+        TaskRepository repository = mock(TaskRepository.class);
+        TaskService service = new TaskService(repository);
+
+        Task matchingTask =
+                new Task(1L, "Learn Spring Boot", false);
+
+        when(repository.findByTitleContainingIgnoreCase("spring"))
+                .thenReturn(List.of(matchingTask));
+
+        // Act
+        List<Task> results =
+                service.searchTasksByTitle("spring");
+
+        // Assert
+        assertEquals(1, results.size());
+        assertSame(matchingTask, results.get(0));
+    }
 }
