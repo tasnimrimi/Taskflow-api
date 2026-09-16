@@ -12,6 +12,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -186,5 +189,30 @@ class TaskControllerTest {
                 .andExpect(jsonPath("$[0].title")
                         .value("Learn Spring Boot"))
                 .andExpect(jsonPath("$[0].completed").value(false));
+    }
+    @Test
+    void shouldReturnRequestedPageOfTasks() throws Exception {
+        PageRequest pageable = PageRequest.of(0, 2);
+
+        Task firstTask = new Task(1L, "First task", false);
+        Task secondTask = new Task(2L, "Second task", true);
+
+        Page<Task> servicePage =
+                new PageImpl<>(List.of(firstTask, secondTask), pageable, 4);
+
+        when(taskService.getAllTasks(pageable))
+                .thenReturn(servicePage);
+
+        mockMvc.perform(get("/api/tasks/page")
+                        .param("page", "0")
+                        .param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.content[0].title").value("First task"))
+                .andExpect(jsonPath("$.content[1].title").value("Second task"))
+                .andExpect(jsonPath("$.totalElements").value(4))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.number").value(0))
+                .andExpect(jsonPath("$.size").value(2));
     }
 }

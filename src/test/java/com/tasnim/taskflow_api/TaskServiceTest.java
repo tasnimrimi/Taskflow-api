@@ -14,6 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 class TaskServiceTest {
 
@@ -146,4 +150,26 @@ class TaskServiceTest {
         assertEquals(1, results.size());
         assertSame(matchingTask, results.get(0));
     }
+    @Test
+    void shouldReturnRequestedPageOfTasks() {
+        TaskRepository repository = mock(TaskRepository.class);
+        TaskService service = new TaskService(repository);
+        Pageable pageable = PageRequest.of(0, 2);
+
+        Task firstTask = new Task(1L, "First task", false);
+        Task secondTask = new Task(2L, "Second task", true);
+
+        Page<Task> repositoryPage =
+                new PageImpl<>(List.of(firstTask, secondTask), pageable, 4);
+
+        when(repository.findAll(pageable)).thenReturn(repositoryPage);
+
+        Page<Task> result = service.getAllTasks(pageable);
+
+        assertEquals(2, result.getContent().size());
+        assertEquals(4, result.getTotalElements());
+        assertEquals(2, result.getTotalPages());
+        assertSame(firstTask, result.getContent().get(0));
+    }
+
 }

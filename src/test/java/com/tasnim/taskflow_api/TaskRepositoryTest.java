@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 
 import java.util.Optional;
 
@@ -122,5 +124,31 @@ class TaskRepositoryTest {
                                         .contains("spring")
                         )
         );
+    }
+    @Test
+    void shouldReturnTasksInSeparatePages() {
+        Task firstTask = new Task(null, "First task", false);
+        Task secondTask = new Task(null, "Second task", false);
+        Task thirdTask = new Task(null, "Third task", true);
+        Task fourthTask = new Task(null, "Fourth task", true);
+
+        taskRepository.saveAllAndFlush(
+                List.of(firstTask, secondTask, thirdTask, fourthTask)
+        );
+
+        Page<Task> firstPage =
+                taskRepository.findAll(PageRequest.of(0, 2));
+
+        Page<Task> secondPage =
+                taskRepository.findAll(PageRequest.of(1, 2));
+
+        assertEquals(2, firstPage.getContent().size());
+        assertEquals(2, secondPage.getContent().size());
+
+        assertEquals(4, firstPage.getTotalElements());
+        assertEquals(2, firstPage.getTotalPages());
+
+        assertTrue(firstPage.isFirst());
+        assertTrue(secondPage.isLast());
     }
 }

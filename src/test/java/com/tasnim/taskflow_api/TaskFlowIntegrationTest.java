@@ -189,4 +189,35 @@ class TaskFlowIntegrationTest {
                                 "SPRING testing"
                         )));
     }
+    @Test
+    void shouldPaginateTasksThroughCompleteApplication() throws Exception {
+        Task firstTask = new Task(null, "First task", false);
+        Task secondTask = new Task(null, "Second task", false);
+        Task thirdTask = new Task(null, "Third task", true);
+        Task fourthTask = new Task(null, "Fourth task", true);
+
+        taskRepository.saveAllAndFlush(
+                List.of(firstTask, secondTask, thirdTask, fourthTask)
+        );
+
+        mockMvc.perform(get("/api/tasks/page")
+                        .param("page", "0")
+                        .param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.totalElements").value(4))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.number").value(0))
+                .andExpect(jsonPath("$.first").value(true))
+                .andExpect(jsonPath("$.last").value(false));
+
+        mockMvc.perform(get("/api/tasks/page")
+                        .param("page", "1")
+                        .param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.number").value(1))
+                .andExpect(jsonPath("$.first").value(false))
+                .andExpect(jsonPath("$.last").value(true));
+    }
 }
