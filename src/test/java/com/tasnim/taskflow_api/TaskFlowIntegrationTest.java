@@ -21,6 +21,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.web.context.WebApplicationContext;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
+
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:taskflow-integration"
@@ -30,7 +37,20 @@ import static org.hamcrest.Matchers.containsInAnyOrder;
 class TaskFlowIntegrationTest {
 
     @Autowired
+    private WebApplicationContext applicationContext;
+
     private MockMvc mockMvc;
+
+    @BeforeEach
+    void setUpMockMvc() {
+        mockMvc = MockMvcBuilders
+                .webAppContextSetup(applicationContext)
+                .defaultRequest(
+                        get("/").with(user("integration-user"))
+                )
+                .apply(springSecurity())
+                .build();
+    }
 
     @Autowired
     private TaskRepository taskRepository;
@@ -255,7 +275,9 @@ class TaskFlowIntegrationTest {
     }
     @Test
     void shouldExposeOpenApiDocumentation() throws Exception {
-        mockMvc.perform(get("/v3/api-docs"))
+        mockMvc.perform(
+                        get("/v3/api-docs").with(anonymous())
+                )
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.info.title")
                         .value("TaskFlow API"))
@@ -265,5 +287,12 @@ class TaskFlowIntegrationTest {
                         .exists())
                 .andExpect(jsonPath("$['paths']['/api/tasks/page']")
                         .exists());
+    }
+    @Test
+    void shouldRejectAnonymousRequestToTasks() throws Exception {
+        mockMvc.perform(
+                        get("/api/tasks").with(anonymous())
+                )
+                .andExpect(status().isUnauthorized());
     }
 }

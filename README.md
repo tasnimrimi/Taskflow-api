@@ -8,7 +8,7 @@
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Flyway](https://img.shields.io/badge/Flyway-Migrations-CC0200?style=for-the-badge&logo=flyway&logoColor=white)
-![Tests](https://img.shields.io/badge/Automated_Tests-39-22C55E?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Automated_Tests-40-22C55E?style=for-the-badge)
 
 </div>
 
@@ -34,6 +34,8 @@ The application supports a local H2 setup and a PostgreSQL profile. PostgreSQL s
 - Run with PostgreSQL through a dedicated Spring profile
 - Manage the PostgreSQL schema with Flyway
 - Publish machine-readable OpenAPI documentation and an interactive Swagger UI
+- Protect task endpoints with Spring Security and HTTP Basic authentication
+- Keep Swagger, OpenAPI, and health-check endpoints publicly accessible
 - Verify service, controller, repository, and complete application workflows with automated tests
 
 ## Application Flow
@@ -41,6 +43,8 @@ The application supports a local H2 setup and a PostgreSQL profile. PostgreSQL s
 ```text
 Client
   ↓ HTTP request / JSON
+Spring Security
+  ↓ authenticated request
 TaskController
   ↓ application call
 TaskService
@@ -51,6 +55,7 @@ Database
 ```
 
 - **Controller:** handles routes, JSON, validation, and HTTP responses.
+- **Spring Security:** rejects anonymous access to protected task endpoints before requests reach the controller.
 - **Service:** contains task-related application logic.
 - **Repository:** provides database operations through Spring Data JPA.
 - **Hibernate:** converts Java entity operations into SQL.
@@ -69,6 +74,8 @@ Database
 | `PATCH` | `/api/tasks/{id}` | `200` | Update only the supplied fields; returns `404` when missing |
 | `DELETE` | `/api/tasks/{id}` | `204` | Delete a task; returns `404` when missing |
 | `GET` | `/actuator/health` | `200` | Check application health |
+
+All `/api/tasks` endpoints require authentication. Anonymous requests receive `401 Unauthorized`.
 
 ### Create a task
 
@@ -200,6 +207,18 @@ http://localhost:8080/v3/api-docs
 
 The documentation is generated from the Spring MVC controllers and enriched with OpenAPI metadata from `OpenApiConfig` and `TaskController`.
 
+## Security
+
+Spring Security protects the task API with HTTP Basic authentication. Swagger UI, OpenAPI JSON, and the health endpoint remain public so documentation and service health can be inspected without credentials.
+
+During local development, Spring Boot creates a temporary user named `user` and prints a generated password in the startup console. The password changes when the application restarts and is not stored in the repository.
+
+```text
+Anonymous request → /api/tasks   → 401 Unauthorized
+Anonymous request → /v3/api-docs → 200 OK
+Authenticated request → /api/tasks → 200 OK
+```
+
 ## Run Locally with H2
 
 Requirements: Java 17 and Git. The Maven Wrapper is included, so a global Maven installation is not required.
@@ -210,7 +229,7 @@ cd Taskflow-api
 .\mvnw.cmd spring-boot:run
 ```
 
-The default profile stores H2 data in `./data/taskflow`. Open the API at [http://localhost:8080/api/tasks](http://localhost:8080/api/tasks).
+The default profile stores H2 data in `./data/taskflow`. The task API at [http://localhost:8080/api/tasks](http://localhost:8080/api/tasks) requires the temporary local credentials printed during application startup.
 
 ## Run Locally with PostgreSQL
 
@@ -239,12 +258,12 @@ Flyway records completed migrations in `flyway_schema_history` and applies each 
 
 ## Automated Tests
 
-The project currently contains 39 focused automated tests:
+The project currently contains 40 focused automated tests:
 
 - **8 service tests:** task lookup, partial updates, deletion, filtering, title search, and pagination using a mocked repository
 - **16 controller tests:** routing, JSON, validation, title search, pagination, sorting, input limits, and HTTP responses using a mocked service
 - **6 repository tests:** real JPA persistence, deletion, filtering, title search, pagination, and sorting with temporary H2
-- **9 integration tests:** complete CRUD, filtering, title-search, pagination, sorting, and OpenAPI documentation through all application layers
+- **10 integration tests:** complete CRUD, filtering, title-search, pagination, sorting, OpenAPI documentation, and security rules through all application layers
 
 Run the focused test suite:
 
@@ -255,7 +274,7 @@ Run the focused test suite:
 Expected result:
 
 ```text
-Tests run: 39, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 40, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -268,6 +287,7 @@ src/
 │   │   ├── ApiExceptionHandler.java
 │   │   ├── CreateTaskRequest.java
 │   │   ├── OpenApiConfig.java
+│   │   ├── SecurityConfig.java
 │   │   ├── Task.java
 │   │   ├── TaskController.java
 │   │   ├── TaskRepository.java
@@ -294,6 +314,7 @@ src/
 - Spring Web MVC
 - Spring Data JPA
 - OpenAPI 3 and Swagger UI
+- Spring Security
 - Hibernate
 - PostgreSQL 17
 - H2 Database
