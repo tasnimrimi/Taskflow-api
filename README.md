@@ -8,7 +8,7 @@
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Flyway](https://img.shields.io/badge/Flyway-Migrations-CC0200?style=for-the-badge&logo=flyway&logoColor=white)
-![Tests](https://img.shields.io/badge/Automated_Tests-38-22C55E?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Automated_Tests-39-22C55E?style=for-the-badge)
 
 </div>
 
@@ -33,6 +33,7 @@ The application supports a local H2 setup and a PostgreSQL profile. PostgreSQL s
 - Persist local development data with file-based H2
 - Run with PostgreSQL through a dedicated Spring profile
 - Manage the PostgreSQL schema with Flyway
+- Publish machine-readable OpenAPI documentation and an interactive Swagger UI
 - Verify service, controller, repository, and complete application workflows with automated tests
 
 ## Application Flow
@@ -183,6 +184,22 @@ A blank title produces `400 Bad Request`:
 }
 ```
 
+## Interactive API Documentation
+
+While the application is running, open Swagger UI to explore and execute the documented endpoints from a browser:
+
+```text
+http://localhost:8080/swagger-ui.html
+```
+
+The machine-readable OpenAPI document is available as JSON at:
+
+```text
+http://localhost:8080/v3/api-docs
+```
+
+The documentation is generated from the Spring MVC controllers and enriched with OpenAPI metadata from `OpenApiConfig` and `TaskController`.
+
 ## Run Locally with H2
 
 Requirements: Java 17 and Git. The Maven Wrapper is included, so a global Maven installation is not required.
@@ -222,12 +239,12 @@ Flyway records completed migrations in `flyway_schema_history` and applies each 
 
 ## Automated Tests
 
-The project currently contains 38 focused automated tests:
+The project currently contains 39 focused automated tests:
 
 - **8 service tests:** task lookup, partial updates, deletion, filtering, title search, and pagination using a mocked repository
 - **16 controller tests:** routing, JSON, validation, title search, pagination, sorting, input limits, and HTTP responses using a mocked service
 - **6 repository tests:** real JPA persistence, deletion, filtering, title search, pagination, and sorting with temporary H2
-- **8 integration tests:** complete CRUD, filtering, title-search, pagination, and sorting workflows through all application layers
+- **9 integration tests:** complete CRUD, filtering, title-search, pagination, sorting, and OpenAPI documentation through all application layers
 
 Run the focused test suite:
 
@@ -238,7 +255,7 @@ Run the focused test suite:
 Expected result:
 
 ```text
-Tests run: 38, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 39, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -250,6 +267,7 @@ src/
 │   ├── java/com/tasnim/taskflow_api/
 │   │   ├── ApiExceptionHandler.java
 │   │   ├── CreateTaskRequest.java
+│   │   ├── OpenApiConfig.java
 │   │   ├── Task.java
 │   │   ├── TaskController.java
 │   │   ├── TaskRepository.java
@@ -275,6 +293,7 @@ src/
 - Spring Boot 4.1.1
 - Spring Web MVC
 - Spring Data JPA
+- OpenAPI 3 and Swagger UI
 - Hibernate
 - PostgreSQL 17
 - H2 Database

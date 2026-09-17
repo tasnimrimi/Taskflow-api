@@ -22,9 +22,15 @@ import org.springframework.data.domain.Sort;
 import java.util.Locale;
 import java.util.Set;
 import org.springframework.web.server.ResponseStatusException;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/api/tasks")
+@Tag(
+        name = "Tasks",
+        description = "Create, retrieve, update, delete, filter, search, and paginate tasks"
+)
 public class TaskController {
     private static final Set<String> ALLOWED_SORT_FIELDS =
             Set.of("id", "title", "completed");
@@ -35,6 +41,7 @@ public class TaskController {
         this.taskService = taskService;
     }
 
+    @Operation(summary = "List or filter tasks")
     @GetMapping
     public List<Task> getTasks(
             @RequestParam(required = false) Boolean completed
@@ -46,6 +53,7 @@ public class TaskController {
         return taskService.getTasksByCompleted(completed);
     }
 
+    @Operation(summary = "Get a sorted page of tasks")
     @GetMapping("/page")
     public Page<Task> getTasksPage(
             @RequestParam(defaultValue = "0") int page,
@@ -97,6 +105,7 @@ public class TaskController {
         return taskService.getAllTasks(pageable);
     }
 
+    @Operation(summary = "Search tasks by title")
     @GetMapping("/search")
     public List<Task> searchTasks(
             @RequestParam String title
@@ -104,6 +113,7 @@ public class TaskController {
         return taskService.searchTasksByTitle(title);
     }
 
+    @Operation(summary = "Get one task by ID")
     @GetMapping("/{id}")
     public ResponseEntity<Task> getTaskById(
             @PathVariable Long id
@@ -117,6 +127,7 @@ public class TaskController {
         return ResponseEntity.ok(task);
     }
 
+    @Operation(summary = "Create a task")
     @PostMapping
     public ResponseEntity<Task> createTask(
             @Valid @RequestBody CreateTaskRequest request
@@ -129,6 +140,7 @@ public class TaskController {
                 .body(savedTask);
     }
 
+    @Operation(summary = "Partially update a task")
     @PatchMapping("/{id}")
     public ResponseEntity<Task> updateTask(
             @PathVariable Long id,
@@ -147,6 +159,7 @@ public class TaskController {
         return ResponseEntity.ok(updatedTask);
     }
 
+    @Operation(summary = "Delete a task")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteTask(
             @PathVariable Long id
