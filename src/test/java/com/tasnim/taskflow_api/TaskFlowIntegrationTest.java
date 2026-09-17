@@ -220,4 +220,37 @@ class TaskFlowIntegrationTest {
                 .andExpect(jsonPath("$.first").value(false))
                 .andExpect(jsonPath("$.last").value(true));
     }
+    @Test
+    void shouldSortTasksThroughCompleteApplication() throws Exception {
+        Task thirdAlphabetically =
+                new Task(null, "Write documentation", false);
+
+        Task firstAlphabetically =
+                new Task(null, "Build API", false);
+
+        Task secondAlphabetically =
+                new Task(null, "Learn Spring", true);
+
+        taskRepository.saveAllAndFlush(
+                List.of(
+                        thirdAlphabetically,
+                        firstAlphabetically,
+                        secondAlphabetically
+                )
+        );
+
+        mockMvc.perform(get("/api/tasks/page")
+                        .param("page", "0")
+                        .param("size", "3")
+                        .param("sortBy", "title")
+                        .param("direction", "asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(3))
+                .andExpect(jsonPath("$.content[0].title")
+                        .value("Build API"))
+                .andExpect(jsonPath("$.content[1].title")
+                        .value("Learn Spring"))
+                .andExpect(jsonPath("$.content[2].title")
+                        .value("Write documentation"));
+    }
 }

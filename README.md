@@ -8,7 +8,7 @@
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Flyway](https://img.shields.io/badge/Flyway-Migrations-CC0200?style=for-the-badge&logo=flyway&logoColor=white)
-![Tests](https://img.shields.io/badge/Automated_Tests-30-22C55E?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Automated_Tests-38-22C55E?style=for-the-badge)
 
 </div>
 
@@ -24,6 +24,8 @@ The application supports a local H2 setup and a PostgreSQL profile. PostgreSQL s
 - Filter tasks by completed or unfinished status
 - Search task titles using case-insensitive partial matching
 - Return tasks in page-sized groups with pagination metadata
+- Sort paginated tasks by ID, title, or completion status in ascending or descending order
+- Reject invalid page sizes, page numbers, sort fields, and sort directions
 - Validate task titles before processing requests
 - Return structured JSON validation errors
 - Use the appropriate `200`, `201`, `204`, `400`, and `404` status codes
@@ -60,7 +62,7 @@ Database
 | `GET` | `/api/tasks` | `200` | List every task |
 | `GET` | `/api/tasks?completed={boolean}` | `200` | List only completed or unfinished tasks |
 | `GET` | `/api/tasks/search?title={text}` | `200` | Search task titles using case-insensitive partial matching |
-| `GET` | `/api/tasks/page?page={number}&size={number}` | `200` | Return one page of tasks with pagination metadata |
+| `GET` | `/api/tasks/page?page={number}&size={number}&sortBy={field}&direction={order}` | `200` | Return a validated, sorted page of tasks with pagination metadata |
 | `GET` | `/api/tasks/{id}` | `200` | Find one task; returns `404` when missing |
 | `POST` | `/api/tasks` | `201` | Create a task |
 | `PATCH` | `/api/tasks/{id}` | `200` | Update only the supplied fields; returns `404` when missing |
@@ -141,6 +143,14 @@ GET /api/tasks/page?page=0&size=2
 
 Page numbers start at `0`. The response contains the tasks under `content` together with metadata such as `totalElements`, `totalPages`, `number`, `size`, `first`, and `last`.
 
+Sort the page by title from A to Z:
+
+```http
+GET /api/tasks/page?page=0&size=2&sortBy=title&direction=asc
+```
+
+Supported sort fields are `id`, `title`, and `completed`. Supported directions are `asc` and `desc`. The page number must be zero or greater, and the page size must be between 1 and 100. Invalid values return `400 Bad Request`.
+
 Example response:
 
 ```json
@@ -212,12 +222,12 @@ Flyway records completed migrations in `flyway_schema_history` and applies each 
 
 ## Automated Tests
 
-The project currently contains 30 focused automated tests:
+The project currently contains 38 focused automated tests:
 
 - **8 service tests:** task lookup, partial updates, deletion, filtering, title search, and pagination using a mocked repository
-- **10 controller tests:** routing, query parameters, JSON, validation, title search, pagination, and HTTP responses using a mocked service
-- **5 repository tests:** real JPA persistence, deletion, filtering, title search, and pagination with temporary H2
-- **7 integration tests:** complete CRUD, filtering, title-search, and pagination workflows through all application layers
+- **16 controller tests:** routing, JSON, validation, title search, pagination, sorting, input limits, and HTTP responses using a mocked service
+- **6 repository tests:** real JPA persistence, deletion, filtering, title search, pagination, and sorting with temporary H2
+- **8 integration tests:** complete CRUD, filtering, title-search, pagination, and sorting workflows through all application layers
 
 Run the focused test suite:
 
@@ -228,7 +238,7 @@ Run the focused test suite:
 Expected result:
 
 ```text
-Tests run: 30, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 38, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 

@@ -18,10 +18,16 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import java.util.Locale;
+import java.util.Set;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/tasks")
 public class TaskController {
+    private static final Set<String> ALLOWED_SORT_FIELDS =
+            Set.of("id", "title", "completed");
 
     private final TaskService taskService;
 
@@ -43,9 +49,51 @@ public class TaskController {
     @GetMapping("/page")
     public Page<Task> getTasksPage(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "asc") String direction) {
 
-        Pageable pageable = PageRequest.of(page, size);
+        if (page < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "page must be zero or greater"
+            );
+        }
+
+        if (size < 1 || size > 100) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "size must be between 1 and 100"
+            );
+        }
+
+        String normalizedSortBy =
+                sortBy.toLowerCase(Locale.ROOT);
+
+        String normalizedDirection =
+                direction.toLowerCase(Locale.ROOT);
+
+        if (!ALLOWED_SORT_FIELDS.contains(normalizedSortBy)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "sortBy must be id, title, or completed"
+            );
+        }
+
+        if (!normalizedDirection.equals("asc")
+                && !normalizedDirection.equals("desc")) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "direction must be asc or desc"
+            );
+        }
+
+        Sort sort = normalizedDirection.equals("desc")
+                ? Sort.by(normalizedSortBy).descending()
+                : Sort.by(normalizedSortBy).ascending();
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
         return taskService.getAllTasks(pageable);
     }
 

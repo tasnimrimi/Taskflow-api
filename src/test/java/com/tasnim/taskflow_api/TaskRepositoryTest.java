@@ -7,6 +7,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.util.Optional;
 
@@ -150,5 +151,46 @@ class TaskRepositoryTest {
 
         assertTrue(firstPage.isFirst());
         assertTrue(secondPage.isLast());
+    }
+    @Test
+    void shouldSortTasksByTitleAscending() {
+        Task thirdAlphabetically =
+                new Task(null, "Write documentation", false);
+
+        Task firstAlphabetically =
+                new Task(null, "Build API", false);
+
+        Task secondAlphabetically =
+                new Task(null, "Learn Spring", false);
+
+        taskRepository.saveAllAndFlush(
+                List.of(
+                        thirdAlphabetically,
+                        firstAlphabetically,
+                        secondAlphabetically
+                )
+        );
+
+        Page<Task> result = taskRepository.findAll(
+                PageRequest.of(
+                        0,
+                        3,
+                        Sort.by("title").ascending()
+                )
+        );
+
+        List<String> returnedTitles = result.getContent()
+                .stream()
+                .map(Task::getTitle)
+                .toList();
+
+        assertEquals(
+                List.of(
+                        "Build API",
+                        "Learn Spring",
+                        "Write documentation"
+                ),
+                returnedTitles
+        );
     }
 }

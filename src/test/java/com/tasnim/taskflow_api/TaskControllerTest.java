@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -192,7 +193,11 @@ class TaskControllerTest {
     }
     @Test
     void shouldReturnRequestedPageOfTasks() throws Exception {
-        PageRequest pageable = PageRequest.of(0, 2);
+        PageRequest pageable = PageRequest.of(
+                0,
+                2,
+                Sort.by("id").ascending()
+        );
 
         Task firstTask = new Task(1L, "First task", false);
         Task secondTask = new Task(2L, "Second task", true);
@@ -214,5 +219,75 @@ class TaskControllerTest {
                 .andExpect(jsonPath("$.totalPages").value(2))
                 .andExpect(jsonPath("$.number").value(0))
                 .andExpect(jsonPath("$.size").value(2));
+    }
+    @Test
+    void shouldReturnTasksSortedByTitleDescending() throws Exception {
+        PageRequest pageable = PageRequest.of(
+                0,
+                2,
+                Sort.by("title").descending()
+        );
+
+        Task firstTask = new Task(2L, "Test pagination", false);
+        Task secondTask = new Task(1L, "Learn Spring", false);
+
+        Page<Task> servicePage =
+                new PageImpl<>(List.of(firstTask, secondTask), pageable, 2);
+
+        when(taskService.getAllTasks(pageable))
+                .thenReturn(servicePage);
+
+        mockMvc.perform(get("/api/tasks/page")
+                        .param("page", "0")
+                        .param("size", "2")
+                        .param("sortBy", "title")
+                        .param("direction", "desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.content[0].title")
+                        .value("Test pagination"))
+                .andExpect(jsonPath("$.content[1].title")
+                        .value("Learn Spring"))
+                .andExpect(jsonPath("$.number").value(0))
+                .andExpect(jsonPath("$.size").value(2));
+    }
+    @Test
+    void shouldReturn400ForInvalidSortField() throws Exception {
+        mockMvc.perform(get("/api/tasks/page")
+                        .param("page", "0")
+                        .param("size", "2")
+                        .param("sortBy", "password")
+                        .param("direction", "asc"))
+                .andExpect(status().isBadRequest());
+    }
+    @Test
+    void shouldReturn400ForInvalidSortDirection() throws Exception {
+        mockMvc.perform(get("/api/tasks/page")
+                        .param("page", "0")
+                        .param("size", "2")
+                        .param("sortBy", "title")
+                        .param("direction", "sideways"))
+                .andExpect(status().isBadRequest());
+    }
+    @Test
+    void shouldReturn400ForNegativePageNumber() throws Exception {
+        mockMvc.perform(get("/api/tasks/page")
+                        .param("page", "-1")
+                        .param("size", "10"))
+                .andExpect(status().isBadRequest());
+    }
+    @Test
+    void shouldReturn400WhenPageSizeIsZero() throws Exception {
+        mockMvc.perform(get("/api/tasks/page")
+                        .param("page", "0")
+                        .param("size", "0"))
+                .andExpect(status().isBadRequest());
+    }
+    @Test
+    void shouldReturn400WhenPageSizeExceedsMaximum() throws Exception {
+        mockMvc.perform(get("/api/tasks/page")
+                        .param("page", "0")
+                        .param("size", "101"))
+                .andExpect(status().isBadRequest());
     }
 }
