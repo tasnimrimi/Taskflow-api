@@ -8,7 +8,7 @@
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Flyway](https://img.shields.io/badge/Flyway-Migrations-CC0200?style=for-the-badge&logo=flyway&logoColor=white)
-![Tests](https://img.shields.io/badge/Automated_Tests-40-22C55E?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Automated_Tests-50-22C55E?style=for-the-badge)
 
 </div>
 
@@ -36,6 +36,8 @@ The application supports a local H2 setup and a PostgreSQL profile. PostgreSQL s
 - Publish machine-readable OpenAPI documentation and an interactive Swagger UI
 - Protect task endpoints with Spring Security and HTTP Basic authentication
 - Keep Swagger, OpenAPI, and health-check endpoints publicly accessible
+- Register database-backed users with validated email addresses and BCrypt password hashing
+- Reject duplicate email registration without exposing passwords or password hashes
 - Verify service, controller, repository, and complete application workflows with automated tests
 
 ## Application Flow
@@ -73,9 +75,37 @@ Database
 | `POST` | `/api/tasks` | `201` | Create a task |
 | `PATCH` | `/api/tasks/{id}` | `200` | Update only the supplied fields; returns `404` when missing |
 | `DELETE` | `/api/tasks/{id}` | `204` | Delete a task; returns `404` when missing |
+| `POST` | `/api/auth/register` | `201` | Register a database-backed user; returns `409` for a duplicate email |
 | `GET` | `/actuator/health` | `200` | Check application health |
 
 All `/api/tasks` endpoints require authentication. Anonymous requests receive `401 Unauthorized`.
+
+### Register a user
+
+Registration is public so a new visitor can create an account:
+
+```http
+POST /api/auth/register
+Content-Type: application/json
+```
+
+```json
+{
+  "email": "learner@example.com",
+  "password": "Learning123!"
+}
+```
+
+The email is normalized, the password is stored only as a BCrypt hash, and the response exposes only safe fields:
+
+```json
+{
+  "id": 1,
+  "email": "learner@example.com"
+}
+```
+
+Invalid registration data returns `400 Bad Request`, while an existing email returns `409 Conflict`.
 
 ### Create a task
 
@@ -211,6 +241,8 @@ The documentation is generated from the Spring MVC controllers and enriched with
 
 Spring Security protects the task API with HTTP Basic authentication. Swagger UI, OpenAPI JSON, and the health endpoint remain public so documentation and service health can be inspected without credentials.
 
+`POST /api/auth/register` is also public. Registered users are persisted in `app_users`, and only BCrypt password hashes are stored. At this checkpoint, protected task access still uses Spring Boot's temporary generated local user; database-backed registration and protected-endpoint authentication are documented separately to avoid implying that registered users can already sign in.
+
 During local development, Spring Boot creates a temporary user named `user` and prints a generated password in the startup console. The password changes when the application restarts and is not stored in the repository.
 
 ```text
@@ -252,29 +284,30 @@ The schema is managed by these versioned migrations:
 ```text
 V1__create_tasks_table.sql         # creates the tasks table
 V2__limit_task_title_length.sql    # limits titles to 100 characters
+V3__create_app_users_table.sql     # creates users with unique emails and password hashes
 ```
 
 Flyway records completed migrations in `flyway_schema_history` and applies each version only once.
 
 ## Automated Tests
 
-The project currently contains 40 focused automated tests:
+The project currently contains 50 focused automated tests:
 
-- **8 service tests:** task lookup, partial updates, deletion, filtering, title search, and pagination using a mocked repository
-- **16 controller tests:** routing, JSON, validation, title search, pagination, sorting, input limits, and HTTP responses using a mocked service
-- **6 repository tests:** real JPA persistence, deletion, filtering, title search, pagination, and sorting with temporary H2
-- **10 integration tests:** complete CRUD, filtering, title-search, pagination, sorting, OpenAPI documentation, and security rules through all application layers
+- **10 service tests:** task behavior plus email normalization, password hashing, persistence, and duplicate-registration prevention
+- **20 controller tests:** task and registration routing, safe JSON, validation, pagination, sorting, and HTTP responses
+- **8 repository tests:** real task and user persistence, lookup, filtering, pagination, and sorting with temporary H2
+- **12 integration tests:** complete task, documentation, security, successful registration, hashing, and duplicate-registration workflows
 
 Run the focused test suite:
 
 ```powershell
-.\mvnw.cmd "-Dtest=TaskServiceTest,TaskControllerTest,TaskRepositoryTest,TaskFlowIntegrationTest" test
+.\mvnw.cmd "-Dtest=TaskServiceTest,UserServiceTest,TaskControllerTest,AuthControllerTest,TaskRepositoryTest,AppUserRepositoryTest,TaskFlowIntegrationTest" test
 ```
 
 Expected result:
 
 ```text
-Tests run: 40, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 50, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -285,26 +318,36 @@ src/
 ├── main/
 │   ├── java/com/tasnim/taskflow_api/
 │   │   ├── ApiExceptionHandler.java
+│   │   ├── AppUser.java
+│   │   ├── AppUserRepository.java
+│   │   ├── AuthController.java
 │   │   ├── CreateTaskRequest.java
 │   │   ├── OpenApiConfig.java
+│   │   ├── RegisterUserRequest.java
 │   │   ├── SecurityConfig.java
 │   │   ├── Task.java
 │   │   ├── TaskController.java
 │   │   ├── TaskRepository.java
 │   │   ├── TaskService.java
 │   │   ├── TaskflowApiApplication.java
-│   │   └── UpdateTaskRequest.java
+│   │   ├── UpdateTaskRequest.java
+│   │   ├── UserResponse.java
+│   │   └── UserService.java
 │   └── resources/
 │       ├── db/migration/
 │       │   ├── V1__create_tasks_table.sql
-│       │   └── V2__limit_task_title_length.sql
+│       │   ├── V2__limit_task_title_length.sql
+│       │   └── V3__create_app_users_table.sql
 │       ├── application-postgres.properties
 │       └── application.properties
 └── test/java/com/tasnim/taskflow_api/
+    ├── AppUserRepositoryTest.java
+    ├── AuthControllerTest.java
     ├── TaskControllerTest.java
     ├── TaskFlowIntegrationTest.java
     ├── TaskRepositoryTest.java
-    └── TaskServiceTest.java
+    ├── TaskServiceTest.java
+    └── UserServiceTest.java
 ```
 
 ## Technology Stack
@@ -315,6 +358,7 @@ src/
 - Spring Data JPA
 - OpenAPI 3 and Swagger UI
 - Spring Security
+- BCrypt password hashing
 - Hibernate
 - PostgreSQL 17
 - H2 Database

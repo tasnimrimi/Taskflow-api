@@ -12,6 +12,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.Optional;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -40,6 +44,11 @@ class TaskFlowIntegrationTest {
     private WebApplicationContext applicationContext;
 
     private MockMvc mockMvc;
+    @Autowired
+    private AppUserRepository appUserRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @BeforeEach
     void setUpMockMvc() {
@@ -294,5 +303,74 @@ class TaskFlowIntegrationTest {
                         get("/api/tasks").with(anonymous())
                 )
                 .andExpect(status().isUnauthorized());
+    }
+    @Test
+    void shouldRegisterUserThroughCompleteApplication() throws Exception {
+        String requestBody = """
+            {
+              "email": "Learner@Example.com",
+              "password": "Learning123!"
+            }
+            """;
+
+        mockMvc.perform(post("/api/auth/register")
+                        .with(anonymous())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email")
+                        .value("learner@example.com"))
+                .andExpect(jsonPath("$.password").doesNotExist())
+                .andExpect(jsonPath("$.passwordHash").doesNotExist());
+
+        Optional<AppUser> savedUser =
+                appUserRepository.findByEmailIgnoreCase(
+                        "learner@example.com"
+                );
+
+        assertTrue(savedUser.isPresent());
+
+        String storedHash =
+                savedUser.get().getPasswordHash();
+
+        assertNotEquals(
+                "Learning123!",
+                storedHash
+        );
+
+        assertTrue(
+                passwordEncoder.matches(
+                        "Learning123!",
+                        storedHash
+                )
+        );
+    }
+    @Test
+    void shouldRejectDuplicateRegistrationThroughCompleteApplication()
+            throws Exception {
+
+        String requestBody = """
+            {
+              "email": "duplicate@example.com",
+              "password": "Learning123!"
+            }
+            """;
+
+        mockMvc.perform(post("/api/auth/register")
+                        .with(anonymous())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/auth/register")
+                        .with(anonymous())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isConflict());
+
+        assertEquals(
+                1,
+                appUserRepository.count()
+        );
     }
 }
