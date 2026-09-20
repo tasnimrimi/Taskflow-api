@@ -8,7 +8,7 @@
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Flyway](https://img.shields.io/badge/Flyway-Migrations-CC0200?style=for-the-badge&logo=flyway&logoColor=white)
-![Tests](https://img.shields.io/badge/Automated_Tests-50-22C55E?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Automated_Tests-53-22C55E?style=for-the-badge)
 
 </div>
 
@@ -38,6 +38,7 @@ The application supports a local H2 setup and a PostgreSQL profile. PostgreSQL s
 - Keep Swagger, OpenAPI, and health-check endpoints publicly accessible
 - Register database-backed users with validated email addresses and BCrypt password hashing
 - Reject duplicate email registration without exposing passwords or password hashes
+- Authenticate registered users by loading their email and password hash from the database
 - Verify service, controller, repository, and complete application workflows with automated tests
 
 ## Application Flow
@@ -57,7 +58,7 @@ Database
 ```
 
 - **Controller:** handles routes, JSON, validation, and HTTP responses.
-- **Spring Security:** rejects anonymous access to protected task endpoints before requests reach the controller.
+- **Spring Security:** loads registered users through `UserDetailsService`, verifies BCrypt passwords, and rejects unauthenticated access before requests reach the controller.
 - **Service:** contains task-related application logic.
 - **Repository:** provides database operations through Spring Data JPA.
 - **Hibernate:** converts Java entity operations into SQL.
@@ -239,16 +240,16 @@ The documentation is generated from the Spring MVC controllers and enriched with
 
 ## Security
 
-Spring Security protects the task API with HTTP Basic authentication. Swagger UI, OpenAPI JSON, and the health endpoint remain public so documentation and service health can be inspected without credentials.
+Spring Security protects the task API with HTTP Basic authentication. Swagger UI, OpenAPI JSON, the health endpoint, registration, and error responses remain public.
 
-`POST /api/auth/register` is also public. Registered users are persisted in `app_users`, and only BCrypt password hashes are stored. At this checkpoint, protected task access still uses Spring Boot's temporary generated local user; database-backed registration and protected-endpoint authentication are documented separately to avoid implying that registered users can already sign in.
-
-During local development, Spring Boot creates a temporary user named `user` and prints a generated password in the startup console. The password changes when the application restarts and is not stored in the repository.
+Registered users are persisted in `app_users`, and only BCrypt password hashes are stored. During authentication, `UserDetailsService` finds the submitted email through `AppUserRepository`, and Spring Security compares the submitted password with the stored hash. Spring Boot's temporary generated user is no longer used.
 
 ```text
 Anonymous request → /api/tasks   → 401 Unauthorized
 Anonymous request → /v3/api-docs → 200 OK
-Authenticated request → /api/tasks → 200 OK
+Registered user + correct password → /api/tasks → 200 OK
+Registered user + wrong password → /api/tasks → 401 Unauthorized
+Unknown email → /api/tasks → 401 Unauthorized
 ```
 
 ## Run Locally with H2
@@ -261,7 +262,7 @@ cd Taskflow-api
 .\mvnw.cmd spring-boot:run
 ```
 
-The default profile stores H2 data in `./data/taskflow`. The task API at [http://localhost:8080/api/tasks](http://localhost:8080/api/tasks) requires the temporary local credentials printed during application startup.
+The default profile stores H2 data in `./data/taskflow`. Register an account through `/api/auth/register`, then use that email and password with HTTP Basic authentication to access [http://localhost:8080/api/tasks](http://localhost:8080/api/tasks).
 
 ## Run Locally with PostgreSQL
 
@@ -291,23 +292,23 @@ Flyway records completed migrations in `flyway_schema_history` and applies each 
 
 ## Automated Tests
 
-The project currently contains 50 focused automated tests:
+The project currently contains 53 focused automated tests:
 
 - **10 service tests:** task behavior plus email normalization, password hashing, persistence, and duplicate-registration prevention
 - **20 controller tests:** task and registration routing, safe JSON, validation, pagination, sorting, and HTTP responses
 - **8 repository tests:** real task and user persistence, lookup, filtering, pagination, and sorting with temporary H2
-- **12 integration tests:** complete task, documentation, security, successful registration, hashing, and duplicate-registration workflows
+- **15 integration tests:** complete task, documentation, registration, security rules, successful database authentication, wrong passwords, and unknown users
 
 Run the focused test suite:
 
 ```powershell
-.\mvnw.cmd "-Dtest=TaskServiceTest,UserServiceTest,TaskControllerTest,AuthControllerTest,TaskRepositoryTest,AppUserRepositoryTest,TaskFlowIntegrationTest" test
+.\mvnw.cmd "-Dtest=TaskServiceTest,UserServiceTest,TaskControllerTest,AuthControllerTest,TaskRepositoryTest,AppUserRepositoryTest,TaskFlowIntegrationTest,AuthenticationIntegrationTest" test
 ```
 
 Expected result:
 
 ```text
-Tests run: 50, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 53, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -343,6 +344,7 @@ src/
 └── test/java/com/tasnim/taskflow_api/
     ├── AppUserRepositoryTest.java
     ├── AuthControllerTest.java
+    ├── AuthenticationIntegrationTest.java
     ├── TaskControllerTest.java
     ├── TaskFlowIntegrationTest.java
     ├── TaskRepositoryTest.java
