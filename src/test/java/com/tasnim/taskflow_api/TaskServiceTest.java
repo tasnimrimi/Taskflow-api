@@ -22,154 +22,514 @@ import org.springframework.data.domain.Pageable;
 class TaskServiceTest {
 
     @Test
-    void shouldReturnNullWhenTaskDoesNotExist() {
-        // Arrange: prepare the situation
-        TaskRepository repository = mock(TaskRepository.class);
-        TaskService service = new TaskService(repository);
+    void shouldReturnTaskWhenItBelongsToAuthenticatedUser() {
+        TaskRepository repository =
+                mock(TaskRepository.class);
 
-        when(repository.findById(999L))
-                .thenReturn(Optional.empty());
+        AppUserRepository userRepository =
+                mock(AppUserRepository.class);
 
-        // Act: run the real service method
-        Task result = service.getTaskById(999L);
+        TaskService service =
+                new TaskService(repository, userRepository);
 
-        // Assert: check the result
-        assertNull(result);
-    }
+        AppUser owner =
+                new AppUser(
+                        "owner@example.com",
+                        "password-hash"
+                );
 
-    @Test
-    void shouldReturnTaskWhenTaskExists() {
-        // Arrange: prepare a fake repository and an example task
-        TaskRepository repository = mock(TaskRepository.class);
-        TaskService service = new TaskService(repository);
+        Task existingTask =
+                new Task(1L, "Owned task", false);
 
-        Task existingTask = new Task(1L, "Learn backend testing", false);
+        existingTask.setOwner(owner);
 
-        when(repository.findById(1L))
+        when(userRepository.findByEmailIgnoreCase(
+                "owner@example.com"
+        )).thenReturn(Optional.of(owner));
+
+        when(repository.findByIdAndOwner(1L, owner))
                 .thenReturn(Optional.of(existingTask));
 
-        // Act: ask the real service for task 1
-        Task result = service.getTaskById(1L);
+        Task result = service.getTaskById(
+                1L,
+                "owner@example.com"
+        );
 
-        // Assert: it should return that same task
         assertSame(existingTask, result);
     }
-
     @Test
-    void shouldUpdateCompletedWithoutChangingTitle() {
-        // Arrange: start with a completed task
-        TaskRepository repository = mock(TaskRepository.class);
-        TaskService service = new TaskService(repository);
+    void shouldUpdateTaskOwnedByAuthenticatedUser() {
+        TaskRepository repository =
+                mock(TaskRepository.class);
 
-        Task existingTask = new Task(1L, "Learn testing", true);
+        AppUserRepository userRepository =
+                mock(AppUserRepository.class);
 
-        when(repository.findById(1L))
+        TaskService service =
+                new TaskService(repository, userRepository);
+
+        AppUser owner =
+                new AppUser(
+                        "owner@example.com",
+                        "password-hash"
+                );
+
+        Task existingTask =
+                new Task(1L, "Keep this title", true);
+
+        existingTask.setOwner(owner);
+
+        when(userRepository.findByEmailIgnoreCase(
+                "owner@example.com"
+        )).thenReturn(Optional.of(owner));
+
+        when(repository.findByIdAndOwner(1L, owner))
                 .thenReturn(Optional.of(existingTask));
 
         when(repository.save(existingTask))
                 .thenReturn(existingTask);
 
-        // Act: leave the title unchanged, mark the task unfinished
-        Task result = service.updateTask(1L, null, false);
+        Task result = service.updateTask(
+                1L,
+                "owner@example.com",
+                null,
+                false
+        );
 
-        // Assert: check both requirements
-        assertEquals("Learn testing", result.getTitle());
+        assertEquals("Keep this title", result.getTitle());
         assertFalse(result.isCompleted());
+        assertSame(owner, result.getOwner());
     }
-
     @Test
-    void shouldDeleteTaskWhenTaskExists() {
-        // Arrange: pretend task 1 exists
-        TaskRepository repository = mock(TaskRepository.class);
-        TaskService service = new TaskService(repository);
+    void shouldDeleteTaskOwnedByAuthenticatedUser() {
+        TaskRepository repository =
+                mock(TaskRepository.class);
 
-        when(repository.existsById(1L))
-                .thenReturn(true);
+        AppUserRepository userRepository =
+                mock(AppUserRepository.class);
 
-        // Act: ask the real service to delete it
-        boolean result = service.deleteTask(1L);
+        TaskService service =
+                new TaskService(repository, userRepository);
 
-        // Assert: check the result and the action
+        AppUser owner =
+                new AppUser(
+                        "owner@example.com",
+                        "password-hash"
+                );
+
+        Task existingTask =
+                new Task(1L, "Owned task", false);
+
+        existingTask.setOwner(owner);
+
+        when(userRepository.findByEmailIgnoreCase(
+                "owner@example.com"
+        )).thenReturn(Optional.of(owner));
+
+        when(repository.findByIdAndOwner(1L, owner))
+                .thenReturn(Optional.of(existingTask));
+
+        boolean result = service.deleteTask(
+                1L,
+                "owner@example.com"
+        );
+
         assertTrue(result);
-        verify(repository).deleteById(1L);
-    }
-
-    @Test
-    void shouldNotDeleteTaskWhenTaskDoesNotExist() {
-        // Arrange: pretend task 999 does not exist
-        TaskRepository repository = mock(TaskRepository.class);
-        TaskService service = new TaskService(repository);
-
-        when(repository.existsById(999L))
-                .thenReturn(false);
-
-        // Act: try to delete it
-        boolean result = service.deleteTask(999L);
-
-        // Assert: report failure without requesting deletion
-        assertFalse(result);
-        verify(repository, never()).deleteById(999L);
+        verify(repository).delete(existingTask);
     }
     @Test
-    void shouldReturnOnlyTasksWithRequestedCompletionStatus() {
+    void shouldReturnOnlyTasksOwnedByAuthenticatedUser() {
         // Arrange
-        TaskRepository repository = mock(TaskRepository.class);
-        TaskService service = new TaskService(repository);
+        TaskRepository repository =
+                mock(TaskRepository.class);
+
+        AppUserRepository userRepository =
+                mock(AppUserRepository.class);
+
+        TaskService service =
+                new TaskService(repository, userRepository);
+
+        AppUser owner =
+                new AppUser(
+                        "owner@example.com",
+                        "password-hash"
+                );
+
+        Task firstTask =
+                new Task(1L, "Owner's first task", false);
+
+        firstTask.setOwner(owner);
+
+        Task secondTask =
+                new Task(2L, "Owner's second task", true);
+
+        secondTask.setOwner(owner);
+
+        List<Task> ownedTasks =
+                List.of(firstTask, secondTask);
+
+        when(userRepository.findByEmailIgnoreCase(
+                "owner@example.com"
+        )).thenReturn(Optional.of(owner));
+
+        when(repository.findByOwner(owner))
+                .thenReturn(ownedTasks);
+
+        // Act
+        List<Task> result =
+                service.getAllTasks("owner@example.com");
+
+        // Assert
+        assertEquals(2, result.size());
+        assertSame(firstTask, result.get(0));
+        assertSame(secondTask, result.get(1));
+
+        verify(repository).findByOwner(owner);
+    }
+    @Test
+    void shouldFilterOnlyAuthenticatedUsersTasksByCompleted() {
+        // Arrange
+        TaskRepository repository =
+                mock(TaskRepository.class);
+
+        AppUserRepository userRepository =
+                mock(AppUserRepository.class);
+
+        TaskService service =
+                new TaskService(repository, userRepository);
+
+        AppUser owner =
+                new AppUser(
+                        "owner@example.com",
+                        "password-hash"
+                );
 
         Task unfinishedTask =
-                new Task(1L, "Learn filtering", false);
+                new Task(1L, "Owner's unfinished task", false);
 
-        when(repository.findByCompleted(false))
-                .thenReturn(List.of(unfinishedTask));
+        unfinishedTask.setOwner(owner);
+
+        when(userRepository.findByEmailIgnoreCase(
+                "owner@example.com"
+        )).thenReturn(Optional.of(owner));
+
+        when(repository.findByOwnerAndCompleted(
+                owner,
+                false
+        )).thenReturn(List.of(unfinishedTask));
 
         // Act
-        List<Task> results =
-                service.getTasksByCompleted(false);
+        List<Task> result =
+                service.getTasksByCompleted(
+                        "owner@example.com",
+                        false
+                );
 
         // Assert
-        assertEquals(1, results.size());
-        assertSame(unfinishedTask, results.get(0));
+        assertEquals(1, result.size());
+        assertSame(unfinishedTask, result.get(0));
+
+        verify(repository).findByOwnerAndCompleted(
+                owner,
+                false
+        );
     }
     @Test
-    void shouldReturnTasksMatchingTitleSearch() {
+    void shouldAssignAuthenticatedUserWhenCreatingTask() {
         // Arrange
-        TaskRepository repository = mock(TaskRepository.class);
-        TaskService service = new TaskService(repository);
+        TaskRepository repository =
+                mock(TaskRepository.class);
+
+        AppUserRepository userRepository =
+                mock(AppUserRepository.class);
+
+        TaskService service =
+                new TaskService(repository, userRepository);
+
+        AppUser owner =
+                new AppUser(
+                        "owner@example.com",
+                        "password-hash"
+                );
+
+        when(userRepository.findByEmailIgnoreCase(
+                "owner@example.com"
+        )).thenReturn(Optional.of(owner));
+
+        when(repository.save(
+                org.mockito.ArgumentMatchers.any(Task.class)
+        )).thenAnswer(invocation ->
+                invocation.getArgument(0)
+        );
+
+        // Act
+        Task result = service.createTask(
+                "owner@example.com",
+                "Learn task ownership"
+        );
+
+        // Assert
+        assertEquals(
+                "Learn task ownership",
+                result.getTitle()
+        );
+
+        assertFalse(result.isCompleted());
+        assertSame(owner, result.getOwner());
+
+        verify(repository).save(result);
+    }
+    @Test
+    void shouldNotReturnTaskOwnedByAnotherUser() {
+        // Arrange
+        TaskRepository repository =
+                mock(TaskRepository.class);
+
+        AppUserRepository userRepository =
+                mock(AppUserRepository.class);
+
+        TaskService service =
+                new TaskService(repository, userRepository);
+
+        AppUser requestingUser =
+                new AppUser(
+                        "requester@example.com",
+                        "password-hash"
+                );
+
+        when(userRepository.findByEmailIgnoreCase(
+                "requester@example.com"
+        )).thenReturn(Optional.of(requestingUser));
+
+        // Task 99 does not belong to requestingUser,
+        // so the owner-aware repository search returns empty
+        when(repository.findByIdAndOwner(
+                99L,
+                requestingUser
+        )).thenReturn(Optional.empty());
+
+        // Act
+        Task result = service.getTaskById(
+                99L,
+                "requester@example.com"
+        );
+
+        // Assert
+        assertNull(result);
+
+        verify(repository).findByIdAndOwner(
+                99L,
+                requestingUser
+        );
+
+    }
+    @Test
+    void shouldNotUpdateTaskOwnedByAnotherUser() {
+        // Arrange
+        TaskRepository repository =
+                mock(TaskRepository.class);
+
+        AppUserRepository userRepository =
+                mock(AppUserRepository.class);
+
+        TaskService service =
+                new TaskService(repository, userRepository);
+
+        AppUser requestingUser =
+                new AppUser(
+                        "requester@example.com",
+                        "password-hash"
+                );
+
+        when(userRepository.findByEmailIgnoreCase(
+                "requester@example.com"
+        )).thenReturn(Optional.of(requestingUser));
+
+        // Task 99 is not owned by requestingUser
+        when(repository.findByIdAndOwner(
+                99L,
+                requestingUser
+        )).thenReturn(Optional.empty());
+
+        // Act
+        Task result = service.updateTask(
+                99L,
+                "requester@example.com",
+                "Attempted new title",
+                true
+        );
+
+        // Assert
+        assertNull(result);
+
+        verify(
+                repository,
+                never()
+        ).save(
+                org.mockito.ArgumentMatchers.any(Task.class)
+        );
+    }
+    @Test
+    void shouldNotDeleteTaskOwnedByAnotherUser() {
+        // Arrange
+        TaskRepository repository =
+                mock(TaskRepository.class);
+
+        AppUserRepository userRepository =
+                mock(AppUserRepository.class);
+
+        TaskService service =
+                new TaskService(repository, userRepository);
+
+        AppUser requestingUser =
+                new AppUser(
+                        "requester@example.com",
+                        "password-hash"
+                );
+
+        when(userRepository.findByEmailIgnoreCase(
+                "requester@example.com"
+        )).thenReturn(Optional.of(requestingUser));
+
+        // Task 99 is not owned by requestingUser
+        when(repository.findByIdAndOwner(
+                99L,
+                requestingUser
+        )).thenReturn(Optional.empty());
+
+        // Act
+        boolean result = service.deleteTask(
+                99L,
+                "requester@example.com"
+        );
+
+        // Assert
+        assertFalse(result);
+
+        verify(
+                repository,
+                never()
+        ).delete(
+                org.mockito.ArgumentMatchers.any(Task.class)
+        );
+    }
+    @Test
+    void shouldSearchOnlyAuthenticatedUsersTasks() {
+        // Arrange
+        TaskRepository repository =
+                mock(TaskRepository.class);
+
+        AppUserRepository userRepository =
+                mock(AppUserRepository.class);
+
+        TaskService service =
+                new TaskService(repository, userRepository);
+
+        AppUser owner =
+                new AppUser(
+                        "owner@example.com",
+                        "password-hash"
+                );
 
         Task matchingTask =
-                new Task(1L, "Learn Spring Boot", false);
+                new Task(
+                        1L,
+                        "Learn Spring Security",
+                        false
+                );
 
-        when(repository.findByTitleContainingIgnoreCase("spring"))
-                .thenReturn(List.of(matchingTask));
+        matchingTask.setOwner(owner);
+
+        when(userRepository.findByEmailIgnoreCase(
+                "owner@example.com"
+        )).thenReturn(Optional.of(owner));
+
+        when(repository
+                .findByOwnerAndTitleContainingIgnoreCase(
+                        owner,
+                        "spring"
+                )
+        ).thenReturn(List.of(matchingTask));
 
         // Act
-        List<Task> results =
-                service.searchTasksByTitle("spring");
+        List<Task> result =
+                service.searchTasksByTitle(
+                        "owner@example.com",
+                        "spring"
+                );
 
         // Assert
-        assertEquals(1, results.size());
-        assertSame(matchingTask, results.get(0));
+        assertEquals(1, result.size());
+        assertSame(matchingTask, result.get(0));
+
+        verify(repository)
+                .findByOwnerAndTitleContainingIgnoreCase(
+                        owner,
+                        "spring"
+                );
     }
     @Test
-    void shouldReturnRequestedPageOfTasks() {
-        TaskRepository repository = mock(TaskRepository.class);
-        TaskService service = new TaskService(repository);
-        Pageable pageable = PageRequest.of(0, 2);
+    void shouldPaginateOnlyAuthenticatedUsersTasks() {
+        // Arrange
+        TaskRepository repository =
+                mock(TaskRepository.class);
 
-        Task firstTask = new Task(1L, "First task", false);
-        Task secondTask = new Task(2L, "Second task", true);
+        AppUserRepository userRepository =
+                mock(AppUserRepository.class);
+
+        TaskService service =
+                new TaskService(repository, userRepository);
+
+        AppUser owner =
+                new AppUser(
+                        "owner@example.com",
+                        "password-hash"
+                );
+
+        Pageable pageable =
+                PageRequest.of(0, 2);
+
+        Task firstTask =
+                new Task(1L, "First owned task", false);
+
+        firstTask.setOwner(owner);
+
+        Task secondTask =
+                new Task(2L, "Second owned task", true);
+
+        secondTask.setOwner(owner);
 
         Page<Task> repositoryPage =
-                new PageImpl<>(List.of(firstTask, secondTask), pageable, 4);
+                new PageImpl<>(
+                        List.of(firstTask, secondTask),
+                        pageable,
+                        4
+                );
 
-        when(repository.findAll(pageable)).thenReturn(repositoryPage);
+        when(userRepository.findByEmailIgnoreCase(
+                "owner@example.com"
+        )).thenReturn(Optional.of(owner));
 
-        Page<Task> result = service.getAllTasks(pageable);
+        when(repository.findByOwner(
+                owner,
+                pageable
+        )).thenReturn(repositoryPage);
 
+        // Act
+        Page<Task> result = service.getAllTasks(
+                "owner@example.com",
+                pageable
+        );
+
+        // Assert
         assertEquals(2, result.getContent().size());
         assertEquals(4, result.getTotalElements());
         assertEquals(2, result.getTotalPages());
-        assertSame(firstTask, result.getContent().get(0));
+
+        verify(repository).findByOwner(
+                owner,
+                pageable
+        );
     }
 
 }

@@ -49,9 +49,17 @@ class TaskFlowIntegrationTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+    private AppUser integrationUser;
 
     @BeforeEach
     void setUpMockMvc() {
+        integrationUser = appUserRepository.saveAndFlush(
+                new AppUser(
+                        "integration-user",
+                        "unused-test-password"
+                )
+        );
+
         mockMvc = MockMvcBuilders
                 .webAppContextSetup(applicationContext)
                 .defaultRequest(
@@ -60,6 +68,20 @@ class TaskFlowIntegrationTest {
                 .apply(springSecurity())
                 .build();
     }
+    private Task ownedTask(
+            String title,
+            boolean completed
+    ) {
+        Task task = new Task(
+                null,
+                title,
+                completed
+        );
+
+        task.setOwner(integrationUser);
+
+        return task;
+    }
 
     @Autowired
     private TaskRepository taskRepository;
@@ -67,9 +89,10 @@ class TaskFlowIntegrationTest {
     @Test
     void shouldGetTaskThroughCompleteApplication() throws Exception {
         // Arrange: save a task in the temporary database
-        Task task = new Task();
-        task.setTitle("Test complete workflow");
-        task.setCompleted(false);
+        Task task = ownedTask(
+                "Test complete workflow",
+                false
+        );
 
         Task savedTask = taskRepository.saveAndFlush(task);
 
@@ -114,9 +137,10 @@ class TaskFlowIntegrationTest {
     @Test
     void shouldUpdateTaskThroughCompleteApplication() throws Exception {
         // Arrange: save an unfinished task
-        Task task = new Task();
-        task.setTitle("Learn full integration testing");
-        task.setCompleted(false);
+        Task task = ownedTask(
+                "Learn full integration testing",
+                false
+        );
 
         Task savedTask = taskRepository.saveAndFlush(task);
 
@@ -149,9 +173,10 @@ class TaskFlowIntegrationTest {
     @Test
     void shouldDeleteTaskThroughCompleteApplication() throws Exception {
         // Arrange: save a task in the temporary database
-        Task task = new Task();
-        task.setTitle("Delete through integration test");
-        task.setCompleted(false);
+        Task task = ownedTask(
+                "Delete through integration test",
+                false
+        );
 
         Task savedTask = taskRepository.saveAndFlush(task);
         Long taskId = savedTask.getId();
@@ -172,13 +197,13 @@ class TaskFlowIntegrationTest {
 
         // Arrange: save tasks with different statuses
         Task completedTask =
-                new Task(null, "Completed task", true);
+                ownedTask("Completed task", true);
 
         Task unfinishedTaskOne =
-                new Task(null, "Unfinished task one", false);
+                ownedTask("Unfinished task one", false);
 
         Task unfinishedTaskTwo =
-                new Task(null, "Unfinished task two", false);
+                ownedTask("Unfinished task two", false);
 
         taskRepository.saveAllAndFlush(
                 List.of(
@@ -200,9 +225,14 @@ class TaskFlowIntegrationTest {
     }
     @Test
     void shouldSearchTasksThroughCompleteApplication() throws Exception {
-        Task springTask = new Task(null, "Learn Spring Boot", false);
-        Task javaTask = new Task(null, "Practise Java", false);
-        Task testingTask = new Task(null, "SPRING testing", true);
+        Task springTask =
+                ownedTask("Learn Spring Boot", false);
+
+        Task javaTask =
+                ownedTask("Practise Java", false);
+
+        Task testingTask =
+                ownedTask("SPRING testing", true);
 
         taskRepository.saveAllAndFlush(
                 List.of(springTask, javaTask, testingTask)
@@ -220,10 +250,17 @@ class TaskFlowIntegrationTest {
     }
     @Test
     void shouldPaginateTasksThroughCompleteApplication() throws Exception {
-        Task firstTask = new Task(null, "First task", false);
-        Task secondTask = new Task(null, "Second task", false);
-        Task thirdTask = new Task(null, "Third task", true);
-        Task fourthTask = new Task(null, "Fourth task", true);
+        Task firstTask =
+                ownedTask("First task", false);
+
+        Task secondTask =
+                ownedTask("Second task", false);
+
+        Task thirdTask =
+                ownedTask("Third task", true);
+
+        Task fourthTask =
+                ownedTask("Fourth task", true);
 
         taskRepository.saveAllAndFlush(
                 List.of(firstTask, secondTask, thirdTask, fourthTask)
@@ -252,13 +289,13 @@ class TaskFlowIntegrationTest {
     @Test
     void shouldSortTasksThroughCompleteApplication() throws Exception {
         Task thirdAlphabetically =
-                new Task(null, "Write documentation", false);
+                ownedTask("Write documentation", false);
 
         Task firstAlphabetically =
-                new Task(null, "Build API", false);
+                ownedTask("Build API", false);
 
         Task secondAlphabetically =
-                new Task(null, "Learn Spring", true);
+                ownedTask("Learn Spring", true);
 
         taskRepository.saveAllAndFlush(
                 List.of(
@@ -368,9 +405,80 @@ class TaskFlowIntegrationTest {
                         .content(requestBody))
                 .andExpect(status().isConflict());
 
-        assertEquals(
-                1,
-                appUserRepository.count()
+        long duplicateUserCount =
+                appUserRepository.findAll()
+                        .stream()
+                        .filter(user ->
+                                user.getEmail().equals(
+                                        "duplicate@example.com"
+                                )
+                        )
+                        .count();
+
+        assertEquals(1, duplicateUserCount);
+    }
+    @Test
+    void shouldNotAccessTaskOwnedByAnotherUser()
+            throws Exception {
+
+        // Arrange: create another user
+        AppUser otherUser = appUserRepository.saveAndFlush(
+                new AppUser(
+                        "other-user@example.com",
+                        "unused-test-password"
+                )
         );
+
+        // Create a task belonging to that other user
+        Task privateTask = new Task(
+                null,
+                "Other user's private task",
+                false
+        );
+
+        privateTask.setOwner(otherUser);
+
+        Task savedTask =
+                taskRepository.saveAndFlush(privateTask);
+
+        String updateBody = """
+        {
+          "title": "Attempted change"
+        }
+        """;
+
+        // integration-user cannot read it
+        mockMvc.perform(
+                        get("/api/tasks/" + savedTask.getId())
+                )
+                .andExpect(status().isNotFound());
+
+        // integration-user cannot update it
+        mockMvc.perform(
+                        patch("/api/tasks/" + savedTask.getId())
+                                .contentType(
+                                        MediaType.APPLICATION_JSON
+                                )
+                                .content(updateBody)
+                )
+                .andExpect(status().isNotFound());
+
+        // integration-user cannot delete it
+        mockMvc.perform(
+                        delete("/api/tasks/" + savedTask.getId())
+                )
+                .andExpect(status().isNotFound());
+
+        // Confirm the other user's task still exists
+        Task unchangedTask = taskRepository
+                .findById(savedTask.getId())
+                .orElseThrow();
+
+        assertEquals(
+                "Other user's private task",
+                unchangedTask.getTitle()
+        );
+
+        assertFalse(unchangedTask.isCompleted());
     }
 }

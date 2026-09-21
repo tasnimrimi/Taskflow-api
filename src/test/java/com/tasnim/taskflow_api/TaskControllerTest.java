@@ -36,11 +36,14 @@ class TaskControllerTest {
     @Test
     void shouldReturn404WhenTaskDoesNotExist() throws Exception {
         // Pretend task 999 does not exist
-        when(taskService.getTaskById(999L))
-                .thenReturn(null);
+        when(taskService.getTaskById(
+                999L,
+                "user"
+        )).thenReturn(null);
 
         // Request that task and check for HTTP 404
-        mockMvc.perform(get("/api/tasks/999"))
+        mockMvc.perform(get("/api/tasks/999")
+                        .principal(() -> "user"))
                 .andExpect(status().isNotFound());
     }
 
@@ -49,11 +52,14 @@ class TaskControllerTest {
         // Arrange: prepare a task and make the fake service return it
         Task task = new Task(1L, "Learn controller testing", false);
 
-        when(taskService.getTaskById(1L))
-                .thenReturn(task);
+        when(taskService.getTaskById(
+                1L,
+                "user"
+        )).thenReturn(task);
 
         // Act and Assert: request task 1 and check the response
-        mockMvc.perform(get("/api/tasks/1"))
+        mockMvc.perform(get("/api/tasks/1")
+                        .principal(() -> "user"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.title")
@@ -85,8 +91,10 @@ class TaskControllerTest {
         // Arrange: this is what the fake service will return
         Task savedTask = new Task(1L, "Learn API testing", false);
 
-        when(taskService.createTask("Learn API testing"))
-                .thenReturn(savedTask);
+        when(taskService.createTask(
+                "user",
+                "Learn API testing"
+        )).thenReturn(savedTask);
 
         String requestBody = """
             {
@@ -96,6 +104,7 @@ class TaskControllerTest {
 
         // Act and Assert
         mockMvc.perform(post("/api/tasks")
+                        .principal(() -> "user")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isCreated())
@@ -110,9 +119,12 @@ class TaskControllerTest {
         // Arrange: title stays unchanged, completed becomes true
         Task updatedTask = new Task(1L, "Learn API testing", true);
 
-        when(taskService.updateTask(1L, null, true))
-                .thenReturn(updatedTask);
-
+        when(taskService.updateTask(
+                1L,
+                "user",
+                null,
+                true
+        )).thenReturn(updatedTask);
         String requestBody = """
             {
               "completed": true
@@ -121,6 +133,7 @@ class TaskControllerTest {
 
         // Act and Assert
         mockMvc.perform(patch("/api/tasks/1")
+                        .principal(() -> "user")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isOk())
@@ -133,22 +146,28 @@ class TaskControllerTest {
     @Test
     void shouldDeleteTaskAndReturn204() throws Exception {
         // Arrange: pretend the service successfully deleted task 1
-        when(taskService.deleteTask(1L))
-                .thenReturn(true);
+        when(taskService.deleteTask(
+                1L,
+                "user"
+        )).thenReturn(true);
 
         // Act and Assert
-        mockMvc.perform(delete("/api/tasks/1"))
+        mockMvc.perform(delete("/api/tasks/1")
+                        .principal(() -> "user"))
                 .andExpect(status().isNoContent());
     }
 
     @Test
     void shouldReturn404WhenDeletingMissingTask() throws Exception {
         // Arrange: pretend task 999 does not exist
-        when(taskService.deleteTask(999L))
-                .thenReturn(false);
+        when(taskService.deleteTask(
+                999L,
+                "user"
+        )).thenReturn(false);
 
         // Act and Assert
-        mockMvc.perform(delete("/api/tasks/999"))
+        mockMvc.perform(delete("/api/tasks/999")
+                        .principal(() -> "user"))
                 .andExpect(status().isNotFound());
     }
     @Test
@@ -159,11 +178,14 @@ class TaskControllerTest {
         Task completedTask =
                 new Task(1L, "Completed task", true);
 
-        when(taskService.getTasksByCompleted(true))
-                .thenReturn(List.of(completedTask));
+        when(taskService.getTasksByCompleted(
+                "user",
+                true
+        )).thenReturn(List.of(completedTask));
 
         // Act and Assert
         mockMvc.perform(get("/api/tasks")
+                        .principal(() -> "user")
                         .param("completed", "true"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
@@ -180,11 +202,14 @@ class TaskControllerTest {
         Task matchingTask =
                 new Task(1L, "Learn Spring Boot", false);
 
-        when(taskService.searchTasksByTitle("spring"))
-                .thenReturn(List.of(matchingTask));
+        when(taskService.searchTasksByTitle(
+                "user",
+                "spring"
+        )).thenReturn(List.of(matchingTask));
 
         // Act and Assert
         mockMvc.perform(get("/api/tasks/search")
+                        .principal(() -> "user")
                         .param("title", "spring"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
@@ -207,10 +232,13 @@ class TaskControllerTest {
         Page<Task> servicePage =
                 new PageImpl<>(List.of(firstTask, secondTask), pageable, 4);
 
-        when(taskService.getAllTasks(pageable))
-                .thenReturn(servicePage);
+        when(taskService.getAllTasks(
+                "user",
+                pageable
+        )).thenReturn(servicePage);
 
         mockMvc.perform(get("/api/tasks/page")
+                        .principal(() -> "user")
                         .param("page", "0")
                         .param("size", "2"))
                 .andExpect(status().isOk())
@@ -236,10 +264,13 @@ class TaskControllerTest {
         Page<Task> servicePage =
                 new PageImpl<>(List.of(firstTask, secondTask), pageable, 2);
 
-        when(taskService.getAllTasks(pageable))
-                .thenReturn(servicePage);
+        when(taskService.getAllTasks(
+                "user",
+                pageable
+        )).thenReturn(servicePage);
 
         mockMvc.perform(get("/api/tasks/page")
+                        .principal(() -> "user")
                         .param("page", "0")
                         .param("size", "2")
                         .param("sortBy", "title")

@@ -8,13 +8,13 @@
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Flyway](https://img.shields.io/badge/Flyway-Migrations-CC0200?style=for-the-badge&logo=flyway&logoColor=white)
-![Tests](https://img.shields.io/badge/Automated_Tests-53-22C55E?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Automated_Tests-60-22C55E?style=for-the-badge)
 
 </div>
 
 ## Overview
 
-TaskFlow is a layered backend application for creating and managing tasks. It exposes a JSON REST API, applies request validation and business logic, persists data with Spring Data JPA, and returns meaningful HTTP status codes and validation errors.
+TaskFlow is a layered backend application for creating and managing user-owned tasks. It exposes a JSON REST API, applies request validation and business logic, persists data with Spring Data JPA, and returns meaningful HTTP status codes and validation errors.
 
 The application supports a local H2 setup and a PostgreSQL profile. PostgreSQL schema changes are managed through versioned Flyway migrations.
 
@@ -39,6 +39,9 @@ The application supports a local H2 setup and a PostgreSQL profile. PostgreSQL s
 - Register database-backed users with validated email addresses and BCrypt password hashing
 - Reject duplicate email registration without exposing passwords or password hashes
 - Authenticate registered users by loading their email and password hash from the database
+- Associate every newly created task with its authenticated owner
+- Restrict listing, filtering, searching, pagination, reading, updating, and deleting to the task owner
+- Return `404 Not Found` when a task is missing or belongs to another user
 - Verify service, controller, repository, and complete application workflows with automated tests
 
 ## Application Flow
@@ -59,7 +62,7 @@ Database
 
 - **Controller:** handles routes, JSON, validation, and HTTP responses.
 - **Spring Security:** loads registered users through `UserDetailsService`, verifies BCrypt passwords, and rejects unauthenticated access before requests reach the controller.
-- **Service:** contains task-related application logic.
+- **Service:** contains task-related application logic and enforces task ownership.
 - **Repository:** provides database operations through Spring Data JPA.
 - **Hibernate:** converts Java entity operations into SQL.
 - **Flyway:** creates and versions the PostgreSQL database structure.
@@ -68,14 +71,14 @@ Database
 
 | Method | Endpoint | Success | Description |
 |---|---|---:|---|
-| `GET` | `/api/tasks` | `200` | List every task |
-| `GET` | `/api/tasks?completed={boolean}` | `200` | List only completed or unfinished tasks |
-| `GET` | `/api/tasks/search?title={text}` | `200` | Search task titles using case-insensitive partial matching |
-| `GET` | `/api/tasks/page?page={number}&size={number}&sortBy={field}&direction={order}` | `200` | Return a validated, sorted page of tasks with pagination metadata |
-| `GET` | `/api/tasks/{id}` | `200` | Find one task; returns `404` when missing |
-| `POST` | `/api/tasks` | `201` | Create a task |
-| `PATCH` | `/api/tasks/{id}` | `200` | Update only the supplied fields; returns `404` when missing |
-| `DELETE` | `/api/tasks/{id}` | `204` | Delete a task; returns `404` when missing |
+| `GET` | `/api/tasks` | `200` | List the authenticated user's tasks |
+| `GET` | `/api/tasks?completed={boolean}` | `200` | List the authenticated user's completed or unfinished tasks |
+| `GET` | `/api/tasks/search?title={text}` | `200` | Search the authenticated user's task titles using case-insensitive partial matching |
+| `GET` | `/api/tasks/page?page={number}&size={number}&sortBy={field}&direction={order}` | `200` | Return a validated, sorted page of the authenticated user's tasks |
+| `GET` | `/api/tasks/{id}` | `200` | Find an owned task; returns `404` when missing or owned by another user |
+| `POST` | `/api/tasks` | `201` | Create a task owned by the authenticated user |
+| `PATCH` | `/api/tasks/{id}` | `200` | Update supplied fields on an owned task; returns `404` when unavailable |
+| `DELETE` | `/api/tasks/{id}` | `204` | Delete an owned task; returns `404` when unavailable |
 | `POST` | `/api/auth/register` | `201` | Register a database-backed user; returns `409` for a duplicate email |
 | `GET` | `/actuator/health` | `200` | Check application health |
 
@@ -244,6 +247,8 @@ Spring Security protects the task API with HTTP Basic authentication. Swagger UI
 
 Registered users are persisted in `app_users`, and only BCrypt password hashes are stored. During authentication, `UserDetailsService` finds the submitted email through `AppUserRepository`, and Spring Security compares the submitted password with the stored hash. Spring Boot's temporary generated user is no longer used.
 
+Every task is associated with an owner. Task queries include the authenticated owner, preventing one registered user from listing, reading, updating, or deleting another user's tasks. A task that is missing or belongs to another user produces the same `404 Not Found` response so the API does not reveal another user's data.
+
 ```text
 Anonymous request → /api/tasks   → 401 Unauthorized
 Anonymous request → /v3/api-docs → 200 OK
@@ -286,18 +291,19 @@ The schema is managed by these versioned migrations:
 V1__create_tasks_table.sql         # creates the tasks table
 V2__limit_task_title_length.sql    # limits titles to 100 characters
 V3__create_app_users_table.sql     # creates users with unique emails and password hashes
+V4__add_task_owner.sql             # associates tasks with their owning users
 ```
 
 Flyway records completed migrations in `flyway_schema_history` and applies each version only once.
 
 ## Automated Tests
 
-The project currently contains 53 focused automated tests:
+The project currently contains 60 focused automated tests:
 
-- **10 service tests:** task behavior plus email normalization, password hashing, persistence, and duplicate-registration prevention
+- **13 service tests:** owner-aware task behavior plus email normalization, password hashing, persistence, and duplicate-registration prevention
 - **20 controller tests:** task and registration routing, safe JSON, validation, pagination, sorting, and HTTP responses
-- **8 repository tests:** real task and user persistence, lookup, filtering, pagination, and sorting with temporary H2
-- **15 integration tests:** complete task, documentation, registration, security rules, successful database authentication, wrong passwords, and unknown users
+- **10 repository tests:** real task and user persistence, ownership, lookup, filtering, pagination, and sorting with temporary H2
+- **17 integration and application-context tests:** complete task ownership, cross-user rejection, documentation, registration, security rules, successful database authentication, wrong passwords, and unknown users
 
 Run the focused test suite:
 
@@ -308,7 +314,7 @@ Run the focused test suite:
 Expected result:
 
 ```text
-Tests run: 53, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 60, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -338,7 +344,8 @@ src/
 │       ├── db/migration/
 │       │   ├── V1__create_tasks_table.sql
 │       │   ├── V2__limit_task_title_length.sql
-│       │   └── V3__create_app_users_table.sql
+│       │   ├── V3__create_app_users_table.sql
+│       │   └── V4__add_task_owner.sql
 │       ├── application-postgres.properties
 │       └── application.properties
 └── test/java/com/tasnim/taskflow_api/

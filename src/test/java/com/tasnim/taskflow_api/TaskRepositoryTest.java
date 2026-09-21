@@ -16,6 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DataJpaTest
 class TaskRepositoryTest {
+    @Autowired
+    private AppUserRepository appUserRepository;
 
     @Autowired
     private TaskRepository taskRepository;
@@ -64,7 +66,14 @@ class TaskRepositoryTest {
     }
     @Test
     void shouldFindOnlyUnfinishedTasks() {
-        // Arrange: create tasks with different completion values
+        // Arrange: create one owner and tasks with different completion values
+        AppUser owner = appUserRepository.saveAndFlush(
+                new AppUser(
+                        "owner@example.com",
+                        "password-hash"
+                )
+        );
+
         Task finishedTask =
                 new Task(null, "Finished task", true);
 
@@ -73,6 +82,10 @@ class TaskRepositoryTest {
 
         Task unfinishedTaskTwo =
                 new Task(null, "Unfinished task two", false);
+
+        finishedTask.setOwner(owner);
+        unfinishedTaskOne.setOwner(owner);
+        unfinishedTaskTwo.setOwner(owner);
 
         taskRepository.saveAllAndFlush(
                 List.of(
@@ -84,7 +97,10 @@ class TaskRepositoryTest {
 
         // Act: ask the database only for unfinished tasks
         List<Task> results =
-                taskRepository.findByCompleted(false);
+                taskRepository.findByOwnerAndCompleted(
+                        owner,
+                        false
+                );
 
         // Assert
         assertEquals(2, results.size());
@@ -97,6 +113,13 @@ class TaskRepositoryTest {
     @Test
     void shouldSearchTasksByTitleIgnoringCase() {
         // Arrange
+        AppUser owner = appUserRepository.saveAndFlush(
+                new AppUser(
+                        "search-owner@example.com",
+                        "password-hash"
+                )
+        );
+
         Task firstTask =
                 new Task(null, "Learn Spring Boot", false);
 
@@ -106,13 +129,21 @@ class TaskRepositoryTest {
         Task thirdTask =
                 new Task(null, "SPRING testing", true);
 
+        firstTask.setOwner(owner);
+        secondTask.setOwner(owner);
+        thirdTask.setOwner(owner);
+
         taskRepository.saveAllAndFlush(
                 List.of(firstTask, secondTask, thirdTask)
         );
 
         // Act: search using lowercase text
         List<Task> results =
-                taskRepository.findByTitleContainingIgnoreCase("spring");
+                taskRepository
+                        .findByOwnerAndTitleContainingIgnoreCase(
+                                owner,
+                                "spring"
+                        );
 
         // Assert: both Spring titles should be returned
         assertEquals(2, results.size());
@@ -192,5 +223,105 @@ class TaskRepositoryTest {
                 ),
                 returnedTitles
         );
+    }
+    @Test
+    void shouldReturnOnlyTasksOwnedByRequestedUser() {
+        // Arrange: save two different users
+        AppUser firstUser = appUserRepository.saveAndFlush(
+                new AppUser(
+                        "first@example.com",
+                        "password-hash"
+                )
+        );
+
+        AppUser secondUser = appUserRepository.saveAndFlush(
+                new AppUser(
+                        "second@example.com",
+                        "password-hash"
+                )
+        );
+
+        // Create two tasks belonging to the first user
+        Task firstTask =
+                new Task(null, "First user's task", false);
+
+        firstTask.setOwner(firstUser);
+
+        Task secondTask =
+                new Task(null, "Another first-user task", true);
+
+        secondTask.setOwner(firstUser);
+
+        // Create one task belonging to the second user
+        Task otherUserTask =
+                new Task(null, "Second user's task", false);
+
+        otherUserTask.setOwner(secondUser);
+
+        taskRepository.saveAllAndFlush(
+                List.of(
+                        firstTask,
+                        secondTask,
+                        otherUserTask
+                )
+        );
+
+        // Act: request only the first user's tasks
+        List<Task> results =
+                taskRepository.findByOwner(firstUser);
+
+        // Assert: only the first user's two tasks are returned
+        assertEquals(2, results.size());
+
+        assertTrue(
+                results.stream()
+                        .allMatch(task ->
+                                task.getOwner()
+                                        .getId()
+                                        .equals(firstUser.getId())
+                        )
+        );
+    }
+    @Test
+    void shouldNotReturnTaskWhenItBelongsToAnotherUser() {
+        // Arrange: create two users
+        AppUser taskOwner = appUserRepository.saveAndFlush(
+                new AppUser(
+                        "owner@example.com",
+                        "password-hash"
+                )
+        );
+
+        AppUser anotherUser = appUserRepository.saveAndFlush(
+                new AppUser(
+                        "another@example.com",
+                        "password-hash"
+                )
+        );
+
+        // Create a task belonging only to taskOwner
+        Task task =
+                new Task(null, "Owner's private task", false);
+
+        task.setOwner(taskOwner);
+
+        Task savedTask = taskRepository.saveAndFlush(task);
+
+        // Act: search using each user
+        Optional<Task> resultForOwner =
+                taskRepository.findByIdAndOwner(
+                        savedTask.getId(),
+                        taskOwner
+                );
+
+        Optional<Task> resultForAnotherUser =
+                taskRepository.findByIdAndOwner(
+                        savedTask.getId(),
+                        anotherUser
+                );
+
+        // Assert
+        assertTrue(resultForOwner.isPresent());
+        assertTrue(resultForAnotherUser.isEmpty());
     }
 }

@@ -5,48 +5,96 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 @Service
 public class TaskService {
 
     private final TaskRepository taskRepository;
+    private final AppUserRepository appUserRepository;
 
-    public TaskService(TaskRepository taskRepository) {
+    public TaskService(
+            TaskRepository taskRepository,
+            AppUserRepository appUserRepository
+    ) {
         this.taskRepository = taskRepository;
+        this.appUserRepository = appUserRepository;
     }
 
-    public List<Task> getAllTasks() {
-        return taskRepository.findAll();
+
+    public List<Task> getAllTasks(String email) {
+        AppUser owner = getUserByEmail(email);
+
+        return taskRepository.findByOwner(owner);
     }
-    public Page<Task> getAllTasks(Pageable pageable) {
-        return taskRepository.findAll(pageable);
+
+    public Page<Task> getAllTasks(
+            String email,
+            Pageable pageable
+    ) {
+        AppUser owner = getUserByEmail(email);
+
+        return taskRepository.findByOwner(
+                owner,
+                pageable
+        );
     }
-    public List<Task> getTasksByCompleted(boolean completed) {
-        return taskRepository.findByCompleted(completed);
+    public List<Task> getTasksByCompleted(
+            String email,
+            boolean completed
+    ) {
+        AppUser owner = getUserByEmail(email);
+
+        return taskRepository.findByOwnerAndCompleted(
+                owner,
+                completed
+        );
     }
-    public List<Task> searchTasksByTitle(String title) {
+    public List<Task> searchTasksByTitle(
+            String email,
+            String title
+    ) {
+        AppUser owner = getUserByEmail(email);
+
         return taskRepository
-                .findByTitleContainingIgnoreCase(title);
+                .findByOwnerAndTitleContainingIgnoreCase(
+                        owner,
+                        title
+                );
     }
 
-    public Task getTaskById(Long id) {
-        return taskRepository.findById(id).orElse(null);
+    public Task getTaskById(
+            Long id,
+            String email
+    ) {
+        AppUser owner = getUserByEmail(email);
+
+        return taskRepository
+                .findByIdAndOwner(id, owner)
+                .orElse(null);
     }
 
-    public Task createTask(String title) {
+    public Task createTask(
+            String email,
+            String title
+    ) {
+        AppUser owner = getUserByEmail(email);
+
         Task task = new Task();
         task.setTitle(title);
         task.setCompleted(false);
+        task.setOwner(owner);
 
         return taskRepository.save(task);
     }
 
     public Task updateTask(
             Long id,
+            String email,
             String title,
             Boolean completed
     ) {
-        Task task = getTaskById(id);
+        Task task = getTaskById(id, email);
 
         if (task == null) {
             return null;
@@ -63,12 +111,27 @@ public class TaskService {
         return taskRepository.save(task);
     }
 
-    public boolean deleteTask(Long id) {
-        if (!taskRepository.existsById(id)) {
+    public boolean deleteTask(
+            Long id,
+            String email
+    ) {
+        Task task = getTaskById(id, email);
+
+        if (task == null) {
             return false;
         }
 
-        taskRepository.deleteById(id);
+        taskRepository.delete(task);
         return true;
+    }
+
+    private AppUser getUserByEmail(String email) {
+        return appUserRepository
+                .findByEmailIgnoreCase(email)
+                .orElseThrow(() ->
+                        new UsernameNotFoundException(
+                                "Authenticated user was not found"
+                        )
+                );
     }
 }
