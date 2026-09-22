@@ -8,6 +8,8 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.AuthenticationException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -33,5 +35,22 @@ public class ApiExceptionHandler {
         response.put("message", message);
 
         return ResponseEntity.badRequest().body(response);
+    }
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<Map<String, String>>
+    handleAuthenticationError(
+            AuthenticationException exception
+    ) {
+        Map<String, String> response = new LinkedHashMap<>();
+
+        response.put("error", "Unauthorized");
+        response.put(
+                "message",
+                "Invalid email or password"
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(response);
     }
 }

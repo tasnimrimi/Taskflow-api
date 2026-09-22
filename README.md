@@ -8,7 +8,7 @@
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Flyway](https://img.shields.io/badge/Flyway-Migrations-CC0200?style=for-the-badge&logo=flyway&logoColor=white)
-![Tests](https://img.shields.io/badge/Automated_Tests-60-22C55E?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Automated_Tests-65-22C55E?style=for-the-badge)
 
 </div>
 
@@ -34,7 +34,10 @@ The application supports a local H2 setup and a PostgreSQL profile. PostgreSQL s
 - Run with PostgreSQL through a dedicated Spring profile
 - Manage the PostgreSQL schema with Flyway
 - Publish machine-readable OpenAPI documentation and an interactive Swagger UI
-- Protect task endpoints with Spring Security and HTTP Basic authentication
+- Authenticate through a public login endpoint that returns a signed JWT access token
+- Protect task endpoints with Spring Security OAuth2 Resource Server and bearer-token authentication
+- Use stateless authentication so every protected request is verified from its JWT
+- Reject missing, malformed, incorrectly signed, and expired access tokens
 - Keep Swagger, OpenAPI, and health-check endpoints publicly accessible
 - Register database-backed users with validated email addresses and BCrypt password hashing
 - Reject duplicate email registration without exposing passwords or password hashes
@@ -80,6 +83,7 @@ Database
 | `PATCH` | `/api/tasks/{id}` | `200` | Update supplied fields on an owned task; returns `404` when unavailable |
 | `DELETE` | `/api/tasks/{id}` | `204` | Delete an owned task; returns `404` when unavailable |
 | `POST` | `/api/auth/register` | `201` | Register a database-backed user; returns `409` for a duplicate email |
+| `POST` | `/api/auth/login` | `200` | Verify an email and password and return a signed JWT access token |
 | `GET` | `/actuator/health` | `200` | Check application health |
 
 All `/api/tasks` endpoints require authentication. Anonymous requests receive `401 Unauthorized`.
@@ -111,11 +115,46 @@ The email is normalized, the password is stored only as a BCrypt hash, and the r
 
 Invalid registration data returns `400 Bad Request`, while an existing email returns `409 Conflict`.
 
+### Log in
+
+Submit the registered email and password:
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+```
+
+```json
+{
+  "email": "learner@example.com",
+  "password": "Learning123!"
+}
+```
+
+A successful login returns a signed access token that is valid for 900 seconds:
+
+```json
+{
+  "accessToken": "eyJ...",
+  "tokenType": "Bearer",
+  "expiresIn": 900
+}
+```
+
+Send that token with every protected request:
+
+```http
+Authorization: Bearer eyJ...
+```
+
+An incorrect email or password returns `401 Unauthorized` without creating a token.
+
 ### Create a task
 
 ```http
 POST /api/tasks
 Content-Type: application/json
+Authorization: Bearer eyJ...
 ```
 
 ```json
@@ -243,18 +282,21 @@ The documentation is generated from the Spring MVC controllers and enriched with
 
 ## Security
 
-Spring Security protects the task API with HTTP Basic authentication. Swagger UI, OpenAPI JSON, the health endpoint, registration, and error responses remain public.
+Spring Security protects the task API with stateless JWT bearer authentication. Swagger UI, OpenAPI JSON, the health endpoint, registration, login, and error responses remain public.
 
-Registered users are persisted in `app_users`, and only BCrypt password hashes are stored. During authentication, `UserDetailsService` finds the submitted email through `AppUserRepository`, and Spring Security compares the submitted password with the stored hash. Spring Boot's temporary generated user is no longer used.
+Registered users are persisted in `app_users`, and only BCrypt password hashes are stored. During login, `UserDetailsService` finds the submitted email through `AppUserRepository`, and `AuthenticationManager` uses BCrypt to verify the submitted password. A successful login asks `TokenService` to create a signed RSA access token containing the user's email as its subject, together with its issue and expiration times.
+
+Spring Security's OAuth2 Resource Server reads bearer tokens on protected requests. `JwtDecoder` verifies the signature and expiration, then exposes the token subject through `Principal.getName()`. The server does not save a login session; every protected request must provide its token. The current development RSA key pair is generated when the application starts, so tokens become invalid after a restart.
 
 Every task is associated with an owner. Task queries include the authenticated owner, preventing one registered user from listing, reading, updating, or deleting another user's tasks. A task that is missing or belongs to another user produces the same `404 Not Found` response so the API does not reveal another user's data.
 
 ```text
-Anonymous request → /api/tasks   → 401 Unauthorized
+Register → POST /api/auth/register → 201 Created
+Correct email and password → POST /api/auth/login → signed access token
+Wrong password or unknown email → POST /api/auth/login → 401 Unauthorized
+Valid bearer token → /api/tasks → 200 OK
+Missing, malformed, or expired token → /api/tasks → 401 Unauthorized
 Anonymous request → /v3/api-docs → 200 OK
-Registered user + correct password → /api/tasks → 200 OK
-Registered user + wrong password → /api/tasks → 401 Unauthorized
-Unknown email → /api/tasks → 401 Unauthorized
 ```
 
 ## Run Locally with H2
@@ -267,7 +309,7 @@ cd Taskflow-api
 .\mvnw.cmd spring-boot:run
 ```
 
-The default profile stores H2 data in `./data/taskflow`. Register an account through `/api/auth/register`, then use that email and password with HTTP Basic authentication to access [http://localhost:8080/api/tasks](http://localhost:8080/api/tasks).
+The default profile stores H2 data in `./data/taskflow`. Register an account through `/api/auth/register`, log in through `/api/auth/login`, and send the returned access token as a bearer token when calling [http://localhost:8080/api/tasks](http://localhost:8080/api/tasks).
 
 ## Run Locally with PostgreSQL
 
@@ -298,12 +340,12 @@ Flyway records completed migrations in `flyway_schema_history` and applies each 
 
 ## Automated Tests
 
-The project currently contains 60 focused automated tests:
+The project currently contains 65 focused automated tests:
 
 - **13 service tests:** owner-aware task behavior plus email normalization, password hashing, persistence, and duplicate-registration prevention
-- **20 controller tests:** task and registration routing, safe JSON, validation, pagination, sorting, and HTTP responses
+- **22 controller tests:** task, registration, and login routing plus safe JSON, validation, pagination, sorting, and HTTP responses
 - **10 repository tests:** real task and user persistence, ownership, lookup, filtering, pagination, and sorting with temporary H2
-- **17 integration and application-context tests:** complete task ownership, cross-user rejection, documentation, registration, security rules, successful database authentication, wrong passwords, and unknown users
+- **20 integration and application-context tests:** complete task ownership, cross-user rejection, documentation, registration, password verification, real JWT login, bearer-token access, and rejection of invalid or expired tokens
 
 Run the focused test suite:
 
@@ -314,7 +356,7 @@ Run the focused test suite:
 Expected result:
 
 ```text
-Tests run: 60, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 65, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -329,6 +371,8 @@ src/
 │   │   ├── AppUserRepository.java
 │   │   ├── AuthController.java
 │   │   ├── CreateTaskRequest.java
+│   │   ├── JwtConfig.java
+│   │   ├── LoginRequest.java
 │   │   ├── OpenApiConfig.java
 │   │   ├── RegisterUserRequest.java
 │   │   ├── SecurityConfig.java
@@ -337,6 +381,8 @@ src/
 │   │   ├── TaskRepository.java
 │   │   ├── TaskService.java
 │   │   ├── TaskflowApiApplication.java
+│   │   ├── TokenResponse.java
+│   │   ├── TokenService.java
 │   │   ├── UpdateTaskRequest.java
 │   │   ├── UserResponse.java
 │   │   └── UserService.java
@@ -367,6 +413,8 @@ src/
 - Spring Data JPA
 - OpenAPI 3 and Swagger UI
 - Spring Security
+- Spring Security OAuth2 Resource Server
+- RSA-signed JWT access tokens
 - BCrypt password hashing
 - Hibernate
 - PostgreSQL 17

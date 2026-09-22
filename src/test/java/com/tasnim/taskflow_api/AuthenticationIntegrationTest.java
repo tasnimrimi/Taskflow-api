@@ -7,10 +7,22 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.Instant;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import com.jayway.jsonpath.JsonPath;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MvcResult;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:taskflow-authentication"
@@ -21,6 +33,8 @@ class AuthenticationIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+    @Autowired
+    private JwtEncoder jwtEncoder;
 
     @Autowired
     private AppUserRepository appUserRepository;
@@ -39,11 +53,16 @@ class AuthenticationIntegrationTest {
 
         appUserRepository.saveAndFlush(user);
 
-        mockMvc.perform(get("/api/tasks")
-                        .with(httpBasic(
-                                "learner@example.com",
-                                "Learning123!"
-                        )))
+        String requestBody = """
+            {
+              "email": "learner@example.com",
+              "password": "Learning123!"
+            }
+            """;
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
                 .andExpect(status().isOk());
     }
 
@@ -58,20 +77,106 @@ class AuthenticationIntegrationTest {
 
         appUserRepository.saveAndFlush(user);
 
-        mockMvc.perform(get("/api/tasks")
-                        .with(httpBasic(
-                                "learner@example.com",
-                                "WrongPassword!"
-                        )))
+        String requestBody = """
+            {
+              "email": "learner@example.com",
+              "password": "WrongPassword!"
+            }
+            """;
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
                 .andExpect(status().isUnauthorized());
     }
     @Test
     void shouldRejectUnknownEmail() throws Exception {
+        String requestBody = """
+            {
+              "email": "unknown@example.com",
+              "password": "Learning123!"
+            }
+            """;
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isUnauthorized());
+    }
+    @Test
+    void shouldLoginAndUseJwtToAccessProtectedTasks()
+            throws Exception {
+
+        String requestBody = """
+            {
+              "email": "jwt-user@example.com",
+              "password": "Learning123!"
+            }
+            """;
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isCreated());
+
+        MvcResult loginResult =
+                mockMvc.perform(post("/api/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(requestBody))
+                        .andExpect(status().isOk())
+                        .andReturn();
+
+        String accessToken = JsonPath.read(
+                loginResult.getResponse()
+                        .getContentAsString(),
+                "$.accessToken"
+        );
+
         mockMvc.perform(get("/api/tasks")
-                        .with(httpBasic(
-                                "unknown@example.com",
-                                "Learning123!"
-                        )))
+                        .header(
+                                "Authorization",
+                                "Bearer " + accessToken
+                        ))
+                .andExpect(status().isOk());
+    }
+    @Test
+    void shouldRejectInvalidBearerToken() throws Exception {
+        mockMvc.perform(get("/api/tasks")
+                        .header(
+                                "Authorization",
+                                "Bearer this-is-not-a-valid-jwt"
+                        ))
+                .andExpect(status().isUnauthorized());
+    }
+    @Test
+    void shouldRejectExpiredBearerToken() throws Exception {
+        Instant now = Instant.now();
+
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer("taskflow-api")
+                .subject("expired-user@example.com")
+                .issuedAt(now.minusSeconds(120))
+                .expiresAt(now.minusSeconds(60))
+                .build();
+
+        JwsHeader header = JwsHeader
+                .with(SignatureAlgorithm.RS256)
+                .build();
+
+        String expiredToken = jwtEncoder
+                .encode(
+                        JwtEncoderParameters.from(
+                                header,
+                                claims
+                        )
+                )
+                .getTokenValue();
+
+        mockMvc.perform(get("/api/tasks")
+                        .header(
+                                "Authorization",
+                                "Bearer " + expiredToken
+                        ))
                 .andExpect(status().isUnauthorized());
     }
 }

@@ -12,6 +12,13 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.core.Authentication;
+import static org.mockito.ArgumentMatchers.any;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.BadCredentialsException;
+
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @WebMvcTest(AuthController.class)
 class AuthControllerTest {
@@ -21,6 +28,12 @@ class AuthControllerTest {
 
     @MockitoBean
     private UserService userService;
+
+    @MockitoBean
+    private AuthenticationManager authenticationManager;
+
+    @MockitoBean
+    private TokenService tokenService;
 
     @Test
     void shouldRegisterUserAndReturnSafeResponse() throws Exception {
@@ -112,5 +125,70 @@ class AuthControllerTest {
                         .value(
                                 "Password must be between 8 and 72 characters"
                         ));
+    }
+    @Test
+    void shouldLoginAndReturnAccessToken() throws Exception {
+        Authentication authentication =
+                mock(Authentication.class);
+
+        when(authentication.getName())
+                .thenReturn("learner@example.com");
+
+        when(authenticationManager.authenticate(
+                any(UsernamePasswordAuthenticationToken.class)
+        )).thenReturn(authentication);
+
+        when(tokenService.createAccessToken(
+                "learner@example.com"
+        )).thenReturn(
+                new TokenResponse(
+                        "signed.jwt.token",
+                        900
+                )
+        );
+
+        String requestBody = """
+            {
+              "email": "learner@example.com",
+              "password": "Learning123!"
+            }
+            """;
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken")
+                        .value("signed.jwt.token"))
+                .andExpect(jsonPath("$.tokenType")
+                        .value("Bearer"))
+                .andExpect(jsonPath("$.expiresIn")
+                        .value(900));
+    }
+    @Test
+    void shouldReturn401ForInvalidLogin() throws Exception {
+        when(authenticationManager.authenticate(
+                any(UsernamePasswordAuthenticationToken.class)
+        )).thenThrow(
+                new BadCredentialsException("Bad credentials")
+        );
+
+        String requestBody = """
+            {
+              "email": "learner@example.com",
+              "password": "WrongPassword!"
+            }
+            """;
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error")
+                        .value("Unauthorized"))
+                .andExpect(jsonPath("$.message")
+                        .value("Invalid email or password"));
+
+        verifyNoInteractions(tokenService);
     }
 }
