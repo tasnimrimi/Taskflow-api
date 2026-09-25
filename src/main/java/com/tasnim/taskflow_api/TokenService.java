@@ -19,8 +19,11 @@ public class TokenService {
     public TokenService(JwtEncoder jwtEncoder) {
         this.jwtEncoder = jwtEncoder;
     }
+    public long getAccessTokenDurationSeconds() {
+        return ACCESS_TOKEN_DURATION_SECONDS;
+    }
 
-    public TokenResponse createAccessToken(String email) {
+    public String createAccessToken(String email) {
         Instant issuedAt = Instant.now();
         Instant expiresAt =
                 issuedAt.plusSeconds(ACCESS_TOKEN_DURATION_SECONDS);
@@ -40,9 +43,6 @@ public class TokenService {
                 .encode(JwtEncoderParameters.from(header, claims))
                 .getTokenValue();
 
-        return new TokenResponse(
-                token,
-                ACCESS_TOKEN_DURATION_SECONDS
-        );
+        return token;
     }
 }

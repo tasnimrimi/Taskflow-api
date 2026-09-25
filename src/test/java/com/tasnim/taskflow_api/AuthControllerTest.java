@@ -6,7 +6,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-
+import java.util.Optional;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -17,6 +17,7 @@ import org.springframework.security.core.Authentication;
 import static org.mockito.ArgumentMatchers.any;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.authentication.BadCredentialsException;
+import static org.mockito.Mockito.verify;
 
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -34,6 +35,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private TokenService tokenService;
+
+    @MockitoBean
+    private RefreshTokenService refreshTokenService;
 
     @Test
     void shouldRegisterUserAndReturnSafeResponse() throws Exception {
@@ -140,12 +144,18 @@ class AuthControllerTest {
 
         when(tokenService.createAccessToken(
                 "learner@example.com"
-        )).thenReturn(
-                new TokenResponse(
-                        "signed.jwt.token",
-                        900
-                )
-        );
+        )).thenReturn("signed.jwt.token");
+
+        when(tokenService.getAccessTokenDurationSeconds())
+                .thenReturn(900L);
+
+        when(refreshTokenService.createRefreshToken(
+                "learner@example.com"
+        )).thenReturn("random-refresh-token");
+
+        when(refreshTokenService
+                .getRefreshTokenDurationSeconds())
+                .thenReturn(604800L);
 
         String requestBody = """
             {
@@ -163,7 +173,11 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.tokenType")
                         .value("Bearer"))
                 .andExpect(jsonPath("$.expiresIn")
-                        .value(900));
+                        .value(900))
+                .andExpect(jsonPath("$.refreshToken")
+                        .value("random-refresh-token"))
+                .andExpect(jsonPath("$.refreshExpiresIn")
+                        .value(604800));
     }
     @Test
     void shouldReturn401ForInvalidLogin() throws Exception {
@@ -189,6 +203,90 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.message")
                         .value("Invalid email or password"));
 
+        verifyNoInteractions(
+                tokenService,
+                refreshTokenService
+        );
+    }
+    @Test
+    void shouldReturnNewAccessTokenForValidRefreshToken()
+            throws Exception {
+
+        when(refreshTokenService.findValidUserEmail(
+                "valid-refresh-token"
+        )).thenReturn(
+                Optional.of("learner@example.com")
+        );
+
+        when(tokenService.createAccessToken(
+                "learner@example.com"
+        )).thenReturn("new.jwt.token");
+
+        when(tokenService.getAccessTokenDurationSeconds())
+                .thenReturn(900L);
+
+        String requestBody = """
+            {
+              "refreshToken": "valid-refresh-token"
+            }
+            """;
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken")
+                        .value("new.jwt.token"))
+                .andExpect(jsonPath("$.tokenType")
+                        .value("Bearer"))
+                .andExpect(jsonPath("$.expiresIn")
+                        .value(900))
+                .andExpect(jsonPath("$.refreshToken")
+                        .doesNotExist());
+    }
+    @Test
+    void shouldReturn401ForInvalidRefreshToken()
+            throws Exception {
+
+        when(refreshTokenService.findValidUserEmail(
+                "invalid-refresh-token"
+        )).thenReturn(Optional.empty());
+
+        String requestBody = """
+            {
+              "refreshToken": "invalid-refresh-token"
+            }
+            """;
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isUnauthorized());
+
         verifyNoInteractions(tokenService);
+    }
+    @Test
+    void shouldRevokeRefreshTokenDuringLogout()
+            throws Exception {
+
+        when(refreshTokenService.revokeRefreshToken(
+                "refresh-token-to-revoke"
+        )).thenReturn(true);
+
+        String requestBody = """
+            {
+              "refreshToken": "refresh-token-to-revoke"
+            }
+            """;
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isNoContent());
+
+        verify(refreshTokenService)
+                .revokeRefreshToken(
+                        "refresh-token-to-revoke"
+                );
     }
 }

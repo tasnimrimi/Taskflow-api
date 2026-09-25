@@ -1,24 +1,18 @@
 package com.tasnim.taskflow_api;
 
-public class TokenResponse {
+public class AccessTokenResponse {
 
     private final String accessToken;
     private final String tokenType;
     private final long expiresIn;
-    private final String refreshToken;
-    private final long refreshExpiresIn;
 
-    public TokenResponse(
+    public AccessTokenResponse(
             String accessToken,
-            long expiresIn,
-            String refreshToken,
-            long refreshExpiresIn
+            long expiresIn
     ) {
         this.accessToken = accessToken;
         this.tokenType = "Bearer";
         this.expiresIn = expiresIn;
-        this.refreshToken = refreshToken;
-        this.refreshExpiresIn = refreshExpiresIn;
     }
 
     public String getAccessToken() {
@@ -31,13 +25,5 @@ public class TokenResponse {
 
     public long getExpiresIn() {
         return expiresIn;
-    }
-
-    public String getRefreshToken() {
-        return refreshToken;
-    }
-
-    public long getRefreshExpiresIn() {
-        return refreshExpiresIn;
     }
 }

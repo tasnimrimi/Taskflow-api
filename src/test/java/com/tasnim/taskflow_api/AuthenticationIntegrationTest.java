@@ -179,4 +179,110 @@ class AuthenticationIntegrationTest {
                         ))
                 .andExpect(status().isUnauthorized());
     }
+    @Test
+    void shouldRefreshAccessTokenThroughCompleteApplication()
+            throws Exception {
+
+        String credentials = """
+            {
+              "email": "refresh-user@example.com",
+              "password": "Learning123!"
+            }
+            """;
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(credentials))
+                .andExpect(status().isCreated());
+
+        MvcResult loginResult =
+                mockMvc.perform(post("/api/auth/login")
+                                .contentType(
+                                        MediaType.APPLICATION_JSON
+                                )
+                                .content(credentials))
+                        .andExpect(status().isOk())
+                        .andReturn();
+
+        String refreshToken = JsonPath.read(
+                loginResult.getResponse()
+                        .getContentAsString(),
+                "$.refreshToken"
+        );
+
+        String refreshRequest = """
+            {
+              "refreshToken": "%s"
+            }
+            """.formatted(refreshToken);
+
+        MvcResult refreshResult =
+                mockMvc.perform(post("/api/auth/refresh")
+                                .contentType(
+                                        MediaType.APPLICATION_JSON
+                                )
+                                .content(refreshRequest))
+                        .andExpect(status().isOk())
+                        .andReturn();
+
+        String newAccessToken = JsonPath.read(
+                refreshResult.getResponse()
+                        .getContentAsString(),
+                "$.accessToken"
+        );
+
+        mockMvc.perform(get("/api/tasks")
+                        .header(
+                                "Authorization",
+                                "Bearer " + newAccessToken
+                        ))
+                .andExpect(status().isOk());
+    }
+    @Test
+    void shouldRejectRefreshTokenAfterLogout()
+            throws Exception {
+
+        String credentials = """
+            {
+              "email": "logout-user@example.com",
+              "password": "Learning123!"
+            }
+            """;
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(credentials))
+                .andExpect(status().isCreated());
+
+        MvcResult loginResult =
+                mockMvc.perform(post("/api/auth/login")
+                                .contentType(
+                                        MediaType.APPLICATION_JSON
+                                )
+                                .content(credentials))
+                        .andExpect(status().isOk())
+                        .andReturn();
+
+        String refreshToken = JsonPath.read(
+                loginResult.getResponse()
+                        .getContentAsString(),
+                "$.refreshToken"
+        );
+
+        String tokenRequest = """
+            {
+              "refreshToken": "%s"
+            }
+            """.formatted(refreshToken);
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(tokenRequest))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(tokenRequest))
+                .andExpect(status().isUnauthorized());
+    }
 }

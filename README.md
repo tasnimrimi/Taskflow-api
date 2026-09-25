@@ -8,7 +8,7 @@
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Flyway](https://img.shields.io/badge/Flyway-Migrations-CC0200?style=for-the-badge&logo=flyway&logoColor=white)
-![Tests](https://img.shields.io/badge/Automated_Tests-65-22C55E?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Automated_Tests-75-22C55E?style=for-the-badge)
 
 </div>
 
@@ -38,6 +38,9 @@ The application supports a local H2 setup and a PostgreSQL profile. PostgreSQL s
 - Protect task endpoints with Spring Security OAuth2 Resource Server and bearer-token authentication
 - Use stateless authentication so every protected request is verified from its JWT
 - Reject missing, malformed, incorrectly signed, and expired access tokens
+- Issue seven-day refresh tokens while storing only their SHA-256 hashes
+- Renew expired sessions through a validated refresh-token endpoint
+- Revoke refresh tokens during logout so they cannot be reused
 - Keep Swagger, OpenAPI, and health-check endpoints publicly accessible
 - Register database-backed users with validated email addresses and BCrypt password hashing
 - Reject duplicate email registration without exposing passwords or password hashes
@@ -83,7 +86,9 @@ Database
 | `PATCH` | `/api/tasks/{id}` | `200` | Update supplied fields on an owned task; returns `404` when unavailable |
 | `DELETE` | `/api/tasks/{id}` | `204` | Delete an owned task; returns `404` when unavailable |
 | `POST` | `/api/auth/register` | `201` | Register a database-backed user; returns `409` for a duplicate email |
-| `POST` | `/api/auth/login` | `200` | Verify an email and password and return a signed JWT access token |
+| `POST` | `/api/auth/login` | `200` | Verify an email and password and return access and refresh tokens |
+| `POST` | `/api/auth/refresh` | `200` | Validate a refresh token and return a new access token |
+| `POST` | `/api/auth/logout` | `204` | Revoke a refresh token so it cannot be used again |
 | `GET` | `/actuator/health` | `200` | Check application health |
 
 All `/api/tasks` endpoints require authentication. Anonymous requests receive `401 Unauthorized`.
@@ -131,13 +136,15 @@ Content-Type: application/json
 }
 ```
 
-A successful login returns a signed access token that is valid for 900 seconds:
+A successful login returns a signed access token valid for 900 seconds and a refresh token valid for 604800 seconds:
 
 ```json
 {
   "accessToken": "eyJ...",
   "tokenType": "Bearer",
-  "expiresIn": 900
+  "expiresIn": 900,
+  "refreshToken": "random-secret-value",
+  "refreshExpiresIn": 604800
 }
 ```
 
@@ -148,6 +155,40 @@ Authorization: Bearer eyJ...
 ```
 
 An incorrect email or password returns `401 Unauthorized` without creating a token.
+
+### Refresh an access token
+
+Send the refresh token when the access token expires:
+
+```http
+POST /api/auth/refresh
+Content-Type: application/json
+```
+
+```json
+{
+  "refreshToken": "random-secret-value"
+}
+```
+
+The response contains a new 15-minute access token. Missing, expired, revoked, or unknown refresh tokens are rejected.
+
+### Log out
+
+Revoke the refresh token:
+
+```http
+POST /api/auth/logout
+Content-Type: application/json
+```
+
+```json
+{
+  "refreshToken": "random-secret-value"
+}
+```
+
+A successful logout returns `204 No Content`. Reusing the revoked refresh token returns `401 Unauthorized` from the refresh endpoint.
 
 ### Create a task
 
@@ -282,20 +323,24 @@ The documentation is generated from the Spring MVC controllers and enriched with
 
 ## Security
 
-Spring Security protects the task API with stateless JWT bearer authentication. Swagger UI, OpenAPI JSON, the health endpoint, registration, login, and error responses remain public.
+Spring Security protects the task API with stateless JWT bearer authentication. Swagger UI, OpenAPI JSON, the health endpoint, registration, login, refresh, logout, and error responses remain public.
 
 Registered users are persisted in `app_users`, and only BCrypt password hashes are stored. During login, `UserDetailsService` finds the submitted email through `AppUserRepository`, and `AuthenticationManager` uses BCrypt to verify the submitted password. A successful login asks `TokenService` to create a signed RSA access token containing the user's email as its subject, together with its issue and expiration times.
 
 Spring Security's OAuth2 Resource Server reads bearer tokens on protected requests. `JwtDecoder` verifies the signature and expiration, then exposes the token subject through `Principal.getName()`. The server does not save a login session; every protected request must provide its token. The current development RSA key pair is generated when the application starts, so tokens become invalid after a restart.
 
+Refresh tokens are cryptographically random secrets that remain valid for seven days. Only their SHA-256 hashes are stored in `refresh_tokens`. The refresh endpoint checks the stored hash, expiration time, and revoked state before issuing a new access token. Logout marks the matching refresh token as revoked, preventing later reuse.
+
 Every task is associated with an owner. Task queries include the authenticated owner, preventing one registered user from listing, reading, updating, or deleting another user's tasks. A task that is missing or belongs to another user produces the same `404 Not Found` response so the API does not reveal another user's data.
 
 ```text
 Register → POST /api/auth/register → 201 Created
-Correct email and password → POST /api/auth/login → signed access token
+Correct email and password → POST /api/auth/login → access and refresh tokens
 Wrong password or unknown email → POST /api/auth/login → 401 Unauthorized
 Valid bearer token → /api/tasks → 200 OK
 Missing, malformed, or expired token → /api/tasks → 401 Unauthorized
+Valid refresh token → /api/auth/refresh → new access token
+Logout → refresh token revoked → later refresh returns 401 Unauthorized
 Anonymous request → /v3/api-docs → 200 OK
 ```
 
@@ -334,29 +379,30 @@ V1__create_tasks_table.sql         # creates the tasks table
 V2__limit_task_title_length.sql    # limits titles to 100 characters
 V3__create_app_users_table.sql     # creates users with unique emails and password hashes
 V4__add_task_owner.sql             # associates tasks with their owning users
+V5__create_refresh_tokens_table.sql # stores hashed, expiring, revocable refresh tokens
 ```
 
 Flyway records completed migrations in `flyway_schema_history` and applies each version only once.
 
 ## Automated Tests
 
-The project currently contains 65 focused automated tests:
+The project currently contains 75 focused automated tests:
 
-- **13 service tests:** owner-aware task behavior plus email normalization, password hashing, persistence, and duplicate-registration prevention
-- **22 controller tests:** task, registration, and login routing plus safe JSON, validation, pagination, sorting, and HTTP responses
+- **18 service tests:** owner-aware task behavior, user registration, secure refresh-token generation, hashing, expiration checks, and revocation
+- **25 controller tests:** task, registration, login, refresh, and logout routing plus safe JSON, validation, pagination, sorting, and HTTP responses
 - **10 repository tests:** real task and user persistence, ownership, lookup, filtering, pagination, and sorting with temporary H2
-- **20 integration and application-context tests:** complete task ownership, cross-user rejection, documentation, registration, password verification, real JWT login, bearer-token access, and rejection of invalid or expired tokens
+- **22 integration and application-context tests:** complete task ownership, cross-user rejection, documentation, registration, JWT login, bearer-token access, refresh, logout, and rejection of invalid, expired, or revoked credentials
 
 Run the focused test suite:
 
 ```powershell
-.\mvnw.cmd "-Dtest=TaskServiceTest,UserServiceTest,TaskControllerTest,AuthControllerTest,TaskRepositoryTest,AppUserRepositoryTest,TaskFlowIntegrationTest,AuthenticationIntegrationTest" test
+.\mvnw.cmd "-Dtest=TaskServiceTest,UserServiceTest,RefreshTokenServiceTest,TaskControllerTest,AuthControllerTest,TaskRepositoryTest,AppUserRepositoryTest,TaskFlowIntegrationTest,AuthenticationIntegrationTest" test
 ```
 
 Expected result:
 
 ```text
-Tests run: 65, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 75, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -367,6 +413,7 @@ src/
 ├── main/
 │   ├── java/com/tasnim/taskflow_api/
 │   │   ├── ApiExceptionHandler.java
+│   │   ├── AccessTokenResponse.java
 │   │   ├── AppUser.java
 │   │   ├── AppUserRepository.java
 │   │   ├── AuthController.java
@@ -374,6 +421,10 @@ src/
 │   │   ├── JwtConfig.java
 │   │   ├── LoginRequest.java
 │   │   ├── OpenApiConfig.java
+│   │   ├── RefreshToken.java
+│   │   ├── RefreshTokenRepository.java
+│   │   ├── RefreshTokenRequest.java
+│   │   ├── RefreshTokenService.java
 │   │   ├── RegisterUserRequest.java
 │   │   ├── SecurityConfig.java
 │   │   ├── Task.java
@@ -391,13 +442,15 @@ src/
 │       │   ├── V1__create_tasks_table.sql
 │       │   ├── V2__limit_task_title_length.sql
 │       │   ├── V3__create_app_users_table.sql
-│       │   └── V4__add_task_owner.sql
+│       │   ├── V4__add_task_owner.sql
+│       │   └── V5__create_refresh_tokens_table.sql
 │       ├── application-postgres.properties
 │       └── application.properties
 └── test/java/com/tasnim/taskflow_api/
     ├── AppUserRepositoryTest.java
     ├── AuthControllerTest.java
     ├── AuthenticationIntegrationTest.java
+    ├── RefreshTokenServiceTest.java
     ├── TaskControllerTest.java
     ├── TaskFlowIntegrationTest.java
     ├── TaskRepositoryTest.java
@@ -415,6 +468,7 @@ src/
 - Spring Security
 - Spring Security OAuth2 Resource Server
 - RSA-signed JWT access tokens
+- Hashed, expiring, revocable refresh tokens
 - BCrypt password hashing
 - Hibernate
 - PostgreSQL 17
